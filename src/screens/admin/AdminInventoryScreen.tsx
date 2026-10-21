@@ -1,7 +1,7 @@
 // ===== IMPORT (mengambil library / file yang dibutuhkan) =====
 
 // mengambil React, hook useEffect (efek samping saat layar dibuka), useState (data yang bisa berubah), dan useMemo (komputasi efisien)
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 // mengambil komponen bawaan React Native:
 // View (kotak/div), Text (teks), ScrollView (area yang bisa digulir), StyleSheet (pembuat style),
 // TextInput (kolom ketik), TouchableOpacity (tombol yang bisa ditekan), Alert (popup pesan),
@@ -80,8 +80,6 @@ export default function AdminInventoryScreen() {
   const [location, setLocation] = useState("Gudang Utama");
   const [imageUri, setImageUri] = useState<string | null>(null);
 
-  // opsi satuan untuk dropdown
-  const UNIT_OPTIONS = ["pcs", "box", "liter", "roll", "set", "unit", "btl", "pack", "rim", "mtr", "kg", "gram"];
   // state penanda proses penyimpanan sedang berjalan; awalnya false
   const [saving, setSaving] = useState(false);
   // state penanda upload gambar sedang berjalan
@@ -101,7 +99,7 @@ export default function AdminInventoryScreen() {
   const { refresh: refreshLowStock } = useLowStock();
 
   // shared categories dari context
-  const { activeCategories, loading: catLoading } = useCategories();
+  const { activeCategories } = useCategories();
 
   // produk yang sudah difilter (search + kategori)
   const filtered = useMemo(() => {
@@ -118,7 +116,8 @@ export default function AdminInventoryScreen() {
   }, [products, search, catFilter, lowOnly]);
 
   // fungsi "load" untuk mengambil daftar produk; async artinya boleh menunggu (await)
-  const load = async () => {
+  // useCallback menjaga "load" tetap sama antar render (refreshLowStock juga stabil)
+  const load = useCallback(async () => {
     // memanggil adminGetProducts lalu menunggu hasilnya, disimpan di variabel p
     const p = await adminGetProducts();
     // menyimpan hasil ke state products sehingga tampilan otomatis diperbarui
@@ -128,12 +127,15 @@ export default function AdminInventoryScreen() {
     // mengubah refreshing menjadi false karena proses refresh selesai
     setRefreshing(false);
     void refreshLowStock();
-  };
+  }, [refreshLowStock]);
 
-  // useEffect menjalankan load() sekali saat layar pertama kali muncul (array [] = hanya sekali)
+  // useEffect menjalankan load() sekali saat layar pertama kali muncul
+  // dibungkus async IIFE agar setState tidak terjadi sinkron di dalam efek
   useEffect(() => {
-    load();
-  }, []);
+    void (async () => {
+      await load();
+    })();
+  }, [load]);
 
   // fungsi untuk membuka modal tambah
   const openAdd = () => {

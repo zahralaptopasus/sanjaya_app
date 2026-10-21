@@ -58,7 +58,9 @@ export default function CheckoutScreen({ navigation }: any) {
   // state pesan error pada layar status (mis. gagal membatalkan)
   const [payErr, setPayErr] = useState<string | null>(null);
   // kode pesanan dibangkitkan via Date.now() - diambil 6 digit terakhir untuk menghasilkan kode unik
-  const orderCode = useRef(`SJM-${Date.now().toString().slice(-6)}`).current;
+  // memakai useState dengan lazy initializer supaya kode dibuat SATU KALI saat layar dibuka
+  // (bukan di tiap render, dan bukan dengan membaca .current ref saat render)
+  const [orderCode] = useState(() => `SJM-${Date.now().toString().slice(-6)}`);
   // referensi untuk menyimpan ID order dari database (dibutuhkan saat redirect WebView)
   const orderIdRef = useRef<string | null>(null);
   // penanda agar navigasi ke struk hanya terjadi sekali (cegah dobel dari polling & redirect WebView)
@@ -222,7 +224,7 @@ export default function CheckoutScreen({ navigation }: any) {
   };
 
   // handler perubahan navigasi pada WebView (mendeteksi pembayaran berhasil di halaman Midtrans)
-  const handleNavChange = () => (nav: any) => {
+  const handleNavChange = (nav: any) => {
     // mengambil URL saat ini dari WebView
     const url = (nav?.url ?? '') as string;
     // mendeteksi status pembayaran berhasil: status_code 200 atau transaction_status settlement/capture
@@ -344,7 +346,7 @@ export default function CheckoutScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
         {/* WebView menampilkan halaman pembayaran Midtrans Snap */}
-        <WebView source={{ uri: payUrl }} onNavigationStateChange={handleNavChange()} startInLoadingState />
+        <WebView source={{ uri: payUrl }} onNavigationStateChange={handleNavChange} startInLoadingState />
       </View>
     );
   }

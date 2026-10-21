@@ -726,9 +726,6 @@ export async function exportCSV(filename: string, headers: string[], rows: any[]
       return {};
     }
     
-    // native: use expo-sharing
-    const { shareAsync } = await import('expo-sharing');
-    const Print = await import('expo-print');
     // For native, we'd save to file first then share
     // Simplified: just return success for now
     return {};

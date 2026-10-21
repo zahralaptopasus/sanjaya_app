@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, ScrollView, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { Palette } from '../../theme';
 import { useColors } from '../../store/preferences';
 
 type CategoryItem = { id: string; label: string; icon: string };

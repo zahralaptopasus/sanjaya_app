@@ -8,12 +8,7 @@ import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   View,
-  Text,
   ActivityIndicator,
-  Image,
-  TouchableOpacity,
-  Alert,
-  Platform,
   useColorScheme,
 } from 'react-native';
 // Hook useFonts (memuat font kustom) + varian font Inter dari Expo Google Fonts
@@ -59,7 +54,7 @@ import { supabase } from './src/lib/supabase';
 
 // ===== STATE STORES =====
 // CartProvider & useCart: data keranjang (item, qty, diskon, total, itemCount)
-import { CartProvider, useCart } from './src/store/cart';
+import { CartProvider } from './src/store/cart';
 // GuestProvider & useGuest: status mode tamu (tanpa login)
 import { GuestProvider, useGuest } from './src/store/guest';
 // FavoritesProvider: daftar favorit per user
@@ -82,9 +77,6 @@ import { LowStockProvider } from './src/context/LowStockContext';
 import { NewMovementsProvider } from './src/context/NewMovementsContext';
 // SuppliersProvider (BARU): master supplier global
 import { SuppliersProvider } from './src/context/SuppliersContext';
-
-// Search bus untuk memfokuskan kolom cari dari header
-import { shopSearchBus } from './src/lib/searchBus';
 
 // ===== LAYAR PELANGGAN (Customer Screens) =====
 import WelcomeScreen from './src/screens/WelcomeScreen';
@@ -122,9 +114,6 @@ import AdminSuppliersScreen from './src/screens/admin/AdminSuppliersScreen';
 import { navy, lightPalette, darkPalette } from './src/theme';
 // Komponen header reusable
 import AppHeader from './src/components/layout/AppHeader';
-import HeaderCartButton from './src/components/layout/HeaderCartButton';
-import HeaderSearchButton from './src/components/layout/HeaderSearchButton';
-import HeaderSettingsButton from './src/components/layout/HeaderSettingsButton';
 import AdminLogoutButton from './src/components/layout/AdminLogoutButton';
 import DrawerMenuButton from './src/components/layout/DrawerMenuButton';
 import AdminDrawerContent from './src/components/layout/AdminDrawerContent';
@@ -498,8 +487,6 @@ function LoginStack() {
 export default function App() {
   // State sesi login (null = belum login)
   const [session, setSession] = useState<any>(null);
-  // Loading splash
-  const [loading, setLoading] = useState(true);
   // Penanda role admin
   const [isAdmin, setIsAdmin] = useState(false);
   // Mode gelap/terang sistem (untuk fallback loading screen)
@@ -507,9 +494,18 @@ export default function App() {
 
   // Effect: inisialisasi sesi & listen perubahan auth
   useEffect(() => {
+    // Cek role user dari tabel profiles
+    const checkRole = async (email: string) => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('email', email)
+        .single();
+      setIsAdmin(data?.role === 'admin');
+    };
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      setLoading(false);
       if (session?.user?.email) checkRole(session.user.email);
       else setIsAdmin(false);
     });
@@ -517,22 +513,11 @@ export default function App() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_e, s) => {
       setSession(s);
-      setLoading(false);
       if (s?.user?.email) checkRole(s.user.email);
       else setIsAdmin(false);
     });
     return () => subscription.unsubscribe();
   }, []);
-
-  // Cek role user dari tabel profiles
-  const checkRole = async (email: string) => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('email', email)
-      .single();
-    setIsAdmin(data?.role === 'admin');
-  };
 
   // Logout
   const handleSignOut = () => {

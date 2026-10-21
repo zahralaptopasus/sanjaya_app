@@ -49,7 +49,11 @@ export default function AdminSuppliersScreen() {
   const [saving, setSaving] = useState(false);
 
   // load suppliers on mount
-  useEffect(() => { refresh(true); }, []);
+  useEffect(() => {
+    void (async () => {
+      await refresh(true);
+    })();
+  }, [refresh]);
 
   // pull to refresh
   const onRefresh = async () => {

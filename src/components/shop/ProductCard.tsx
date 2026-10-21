@@ -2,7 +2,6 @@ import React from 'react';
 import { View, TouchableOpacity, Text, Image, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Product } from '../../models';
-import type { Palette } from '../../theme';
 import { useColors } from '../../store/preferences';
 
 type ProductCardProps = {

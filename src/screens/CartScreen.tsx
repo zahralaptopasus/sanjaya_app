@@ -5,7 +5,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import { useCart } from "../store/cart";
 import { useGuest } from "../store/guest";
-import { F, type Palette } from "../theme";
+import { type Palette } from "../theme";
 import { useColors } from "../store/preferences";
 import CartItemCard from "../components/cart/CartItemCard";
 import CartSummary from "../components/cart/CartSummary";

@@ -62,7 +62,11 @@ export default function AdminCarouselScreen() {
   const [uploadingImage, setUploadingImage] = useState(false);
 
   // load slides (admin) on mount
-  useEffect(() => { refresh(true); }, []);
+  useEffect(() => {
+    void (async () => {
+      await refresh(true);
+    })();
+  }, [refresh]);
 
   // pull to refresh
   const onRefresh = async () => {

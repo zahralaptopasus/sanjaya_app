@@ -14,14 +14,12 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { getProducts } from "../repo";
 import type { Product } from "../models";
-import { rp } from "../lib/format";
 import { useCart } from "../store/cart";
 import { shopSearchBus } from "../lib/searchBus";
 import { useGuest } from "../store/guest";
 import { useFavorites } from "../store/favorites";
 import { useCategories } from "../context/CategoriesContext";
 import { useCarousel } from "../context/CarouselContext";
-import type { CarouselSlide } from "../lib/carousel";
 import QtySheet from "../components/QtySheet";
 import PageLoader from "../components/PageLoader";
 import { useColors } from "../store/preferences";

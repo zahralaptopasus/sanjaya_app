@@ -1,7 +1,7 @@
 // ===== IMPORT (mengambil library / file yang dibutuhkan) =====
 
 // mengambil React, hook useEffect (saat layar dibuka), useState (data yang bisa berubah), useMemo (menghitung ulang hanya jika data berubah), dan useCallback
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useRef, useState, useCallback } from 'react';
 // mengambil useFocusEffect untuk reload saat tab fokus
 import { useFocusEffect } from '@react-navigation/native';
 // mengambil komponen React Native:
@@ -95,17 +95,26 @@ export default function AdminFlowScreen() {
     });
   }, [products, search, cat]);
 
+  // nomor urut permintaan: dipakai untuk mengabaikan hasil request lama yang telat tiba
+  // (mis. user ganti filter saat request sebelumnya masih berjalan)
+  const reqSeq = useRef(0);
+
   // fungsi "load" mengambil produk & riwayat sekaligus secara paralel dengan filter
-  const load = async () => {
+  // useCallback menjaga identitas "load" tetap sama selama filter tidak berubah
+  const load = useCallback(async () => {
+    // tandai permintaan ini sebagai yang terbaru
+    const seq = ++reqSeq.current;
     // Promise.all menjalankan dua pengambilan data bersamaan lalu menunggu keduanya selesai
     const [p, m] = await Promise.all([
-      adminGetProducts(), 
+      adminGetProducts(),
       adminGetStockMovements({
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         type: filterType === 'all' ? undefined : filterType,
       })
     ]);
+    // abaikan hasil kalau ternyata ada permintaan yang lebih baru (mencegah data lama menimpa data baru)
+    if (seq !== reqSeq.current) return;
     // simpan daftar produk ke state
     setProducts(p);
     // simpan riwayat pergerakan ke state
@@ -116,22 +125,17 @@ export default function AdminFlowScreen() {
     setRefreshing(false);
     // refresh badge movements
     await refreshNewMovements();
-  };
+  }, [startDate, endDate, filterType, refreshNewMovements]);
 
-  // jalankan load() sekali saat layar pertama kali muncul
-  useEffect(() => { load(); }, []);
-
-  // reload saat tab fokus (misal dari tab PO kembali ke Aliran)
+  // muat data saat layar pertama dibuka & saat tab difokuskan.
+  // karena "load" ikut berubah saat filter berubah, efek ini otomatis reload juga saat filter diganti.
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [])
+      void (async () => {
+        await load();
+      })();
+    }, [load])
   );
-
-  // reload saat filter berubah
-  useEffect(() => {
-    if (!loading) load();
-  }, [filterType, startDate, endDate]);
 
   // hitung summary hari ini
   const todaySummary = useMemo(() => {

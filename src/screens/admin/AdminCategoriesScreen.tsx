@@ -7,7 +7,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useCategories } from '../../context/CategoriesContext';
 import { COMMON_ICONS } from '../../lib/categories';
-import { navy, surface, cardBg, chipBg, muted, ink, bronze, amber } from '../../theme';
+import { navy, surface, cardBg, chipBg, muted, ink, amber } from '../../theme';
 
 // ===== TYPE =====
 type Category = {
@@ -22,7 +22,7 @@ type Category = {
 
 // ===== KOMPONEN UTAMA =====
 export default function AdminCategoriesScreen() {
-  const { categories, activeCategories, loading, refresh, create, update, remove, reorder } = useCategories();
+  const { categories, loading, refresh, create, update, remove, reorder } = useCategories();
   const [refreshing, setRefreshing] = useState(false);
 
   // modal state
@@ -38,7 +38,11 @@ export default function AdminCategoriesScreen() {
   const [saving, setSaving] = useState(false);
 
   // load categories on mount
-  useEffect(() => { refresh(true); }, []);
+  useEffect(() => {
+    void (async () => {
+      await refresh(true);
+    })();
+  }, [refresh]);
 
   // pull to refresh
   const onRefresh = async () => {

@@ -16,6 +16,29 @@ import { rp } from '../../lib/format';
 // mengambil variabel warna dari file theme (supaya warna konsisten di seluruh aplikasi)
 import { navy, surface, ink, muted, amber, bronze, chipBg, cardBg } from '../../theme';
 
+// ===== KOMPONEN KECIL =====
+
+// komponen kecil "Card" (kartu ringkasan); menerima title, value, icon, dan color (default navy)
+// bagian ": { title: string; ... }" adalah tipe data TypeScript untuk menjelaskan jenis tiap parameter
+// DITARUH DI LUAR fungsi layar utama: kalau dibuat di dalam render, state-nya selalu me-reset tiap render
+function Card({ title, value, icon, color = navy }: { title: string; value: string; icon: any; color?: string }) {
+  return (
+    // kotak pembungkus kartu, memakai style "card" dari StyleSheet di bawah
+    <View style={styles.card}>
+      {/* kotak ikon; style dibuat dua lapis: style dasar cardIcon + warna latar sesuai color */}
+      {/* color + '15' artinya warna yang sama tapi transparan (kode 15 = opasitas kecil) */}
+      <View style={[styles.cardIcon, { backgroundColor: color + '15' }]}>
+        {/* menampilkan ikon sesuai nama (name), ukuran 20, dan warna color */}
+        <Ionicons name={icon} size={20} color={color} />
+      </View>
+      {/* menampilkan judul kartu, contoh: "Total Barang" */}
+      <Text style={styles.cardTitle}>{title}</Text>
+      {/* menampilkan nilai kartu, contoh: "120 SKU" */}
+      <Text style={styles.cardValue}>{value}</Text>
+    </View>
+  );
+}
+
 // ===== KOMPONEN UTAMA =====
 
 // membuat komponen layar Dashboard Admin; "export default" artinya komponen ini bisa diimpor di file lain
@@ -31,7 +54,8 @@ export default function AdminDashboardScreen() {
   const [loading, setLoading] = useState(true);
 
   // membuat fungsi "load" untuk mengambil data; "async" artinya fungsi ini boleh menunggu proses (await)
-  const load = async () => {
+  // useCallback menjaga "load" tetap sama antar render (refreshLowStock juga stabil)
+  const load = React.useCallback(async () => {
     // memanggil adminStats lalu menunggu (await) sampai datanya selesai diambil, hasilnya disimpan di variabel s
     const s = await adminStats();
     // menyimpan hasil statistik ke state stats, sehingga tampilan otomatis diperbarui
@@ -40,32 +64,26 @@ export default function AdminDashboardScreen() {
     setLoading(false);
     // menyegarkan jumlah stok minimum agar badge tab Inventaris ikut ter-update
     void refreshLowStock();
-  };
+  }, [refreshLowStock]);
 
-  // useEffect menjalankan kode saat layar pertama kali muncul; array kosong [] artinya hanya dijalankan satu kali
-  React.useEffect(() => { load(); }, []);
+  // useEffect menjalankan kode saat layar pertama kali muncul
+  // dibungkus async IIFE agar setState tidak terjadi sinkron di dalam efek
+  React.useEffect(() => {
+    void (async () => {
+      await load();
+    })();
+  }, [load]);
+
+  // handler tarik-ke-bawah untuk memuat ulang data
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }, [load]);
 
   // jika masih loading, tampilkan animasi loading saja dan hentikan fungsi di sini (return)
   // size="large" = ukuran besar, color = warna navy, style = posisi di tengah layar
   if (loading) return <ActivityIndicator size="large" color={navy} style={{ flex: 1, justifyContent: 'center' }} />;
-
-  // membuat komponen kecil "Card" (kartu ringkasan); menerima title, value, icon, dan color (default navy)
-  // bagian ": { title: string; ... }" adalah tipe data TypeScript untuk menjelaskan jenis tiap parameter
-  const Card = ({ title, value, icon, color = navy }: { title: string; value: string; icon: any; color?: string }) => (
-    // kotak pembungkus kartu, memakai style "card" dari StyleSheet di bawah
-    <View style={styles.card}>
-      {/* kotak ikon; style dibuat dua lapis: style dasar cardIcon + warna latar sesuai color */}
-      {/* color + '15' artinya warna yang sama tapi transparan (kode 15 = opasitas kecil) */}
-      <View style={[styles.cardIcon, { backgroundColor: color + '15' }]}>
-        {/* menampilkan ikon sesuai nama (name), ukuran 20, dan warna color */}
-        <Ionicons name={icon} size={20} color={color} />
-      </View>
-      {/* menampilkan judul kartu, contoh: "Total Barang" */}
-      <Text style={styles.cardTitle}>{title}</Text>
-      {/* menampilkan nilai kartu, contoh: "120 SKU" */}
-      <Text style={styles.cardValue}>{value}</Text>
-    </View>
-  );
 
   // return = isi tampilan yang akan digambar di layar
   return (
@@ -76,7 +94,7 @@ export default function AdminDashboardScreen() {
       // contentContainerStyle = style untuk isi di dalam scroll, di sini memberi jarak 16 di semua sisi
       contentContainerStyle={{ padding: 16 }}
       // refreshControl = fitur tarik layar ke bawah untuk memuat ulang data; onRefresh memanggil fungsi load
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={navy} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={navy} />}
     >
       {/* judul halaman */}
       <Text style={styles.header}>Dashboard Admin</Text>

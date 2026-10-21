@@ -106,8 +106,10 @@ export default function DetailScreen({ navigation, route }: any) {
 
   // useEffect: setiap kali loadReviews berubah (dependensi), jalankan loadReviews
   useEffect(() => {
-    // panggil fungsi pemuat ulasan
-    loadReviews();
+    // panggil fungsi pemuat ulasan; dibungkus async IIFE agar setState tidak sinkron di dalam efek
+    void (async () => {
+      await loadReviews();
+    })();
   }, [loadReviews]);
 
   // "avg" = rata-rata nilai rating; jika belum ada ulasan bernilai 0

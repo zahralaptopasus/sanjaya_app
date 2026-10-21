@@ -1,5 +1,5 @@
 // ===== IMPORT =====
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import {
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { adminGetProducts, adminCreatePO, adminGetPOs, adminReceivePO, adminReceivePOItem, adminReturnPOItem, adminUpdatePOStatus, adminGetSuppliers } from "../../lib/admin";
+import { adminGetProducts, adminCreatePO, adminGetPOs, adminReceivePOItem, adminReturnPOItem, adminUpdatePOStatus } from "../../lib/admin";
 import { useLowStock } from "../../context/LowStockContext";
 import { useSuppliers } from "../../context/SuppliersContext";
 import { rp } from "../../lib/format";
@@ -210,19 +210,20 @@ export default function AdminPOScreen() {
   };
 
   // ambil produk & daftar PO
-  const load = async () => {
-    const [p, o, s] = await Promise.all([adminGetProducts(), adminGetPOs(), refreshSuppliers(true)]);
+  // useCallback menjaga "load" tetap sama antar render (refreshSuppliers juga stabil)
+  const load = useCallback(async () => {
+    const [p, o] = await Promise.all([adminGetProducts(), adminGetPOs(), refreshSuppliers(true)]);
     setProducts(p);
     setPOs(o);
     setLoading(false);
     setRefreshing(false);
-  };
+  }, [refreshSuppliers]);
 
   useEffect(() => {
     void (async () => {
       await load();
     })();
-  }, []);
+  }, [load]);
 
   // daftar kategori untuk chip
   const categories = useMemo(
@@ -242,13 +243,16 @@ export default function AdminPOScreen() {
   }, [products, pickSearch, pickCat]);
 
   // kumpulan kategori barang dalam sebuah PO (via product_id -> products)
-  const poCategorySet = (o: any): Set<string> =>
-    new Set(
-      (o.purchase_order_items ?? [])
-        .map((it: any) => products.find((p: Product) => p.id === it.product_id))
-        .filter(Boolean)
-        .map((p: any) => catOf(p as Product)),
-    );
+  const poCategorySet = useCallback(
+    (o: any): Set<string> =>
+      new Set(
+        (o.purchase_order_items ?? [])
+          .map((it: any) => products.find((p: Product) => p.id === it.product_id))
+          .filter(Boolean)
+          .map((p: any) => catOf(p as Product)),
+      ),
+    [products],
+  );
 
   // daftar PO hasil pencarian + filter kategori + rentang tanggal
   const filteredPO = useMemo(() => {
@@ -273,7 +277,7 @@ export default function AdminPOScreen() {
 
       return okSearch && okCat && okStart && okEnd;
     });
-  }, [pos, searchPO, filterCat, startDate, endDate, products]);
+  }, [pos, searchPO, filterCat, startDate, endDate, poCategorySet]);
 
   // total harga beli dari item yang disusun
   const total = useMemo(
@@ -358,18 +362,6 @@ export default function AdminPOScreen() {
       Alert.alert("Gagal", e?.message ?? "Tidak bisa buat PO");
     } finally {
       setSaving(false);
-    }
-  };
-
-  // terima PO manual (untuk PO lama yang masih pending)
-  const receive = async (id: string) => {
-    try {
-      const res = await adminReceivePO(id);
-      if (res.error) Alert.alert("Gagal", res.error);
-      load();
-      void refreshLowStock();
-    } catch (e: any) {
-      Alert.alert("Gagal", e?.message ?? "Gagal terima PO");
     }
   };
 

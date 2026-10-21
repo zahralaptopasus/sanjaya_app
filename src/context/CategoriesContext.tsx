@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
 import { fetchCategories, fetchActiveCategories, Category, createCategory, updateCategory, deleteCategory, reorderCategories } from '../lib/categories';
 
 interface CategoriesContextType {
@@ -19,7 +19,9 @@ export function CategoriesProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = async (admin = false) => {
+  // useCallback membuat "load" stabil (tidak dibuat ulang tiap render) agar efek di bawah
+  // hanya berjalan sekali, bukan setiap kali layar dirender ulang
+  const load = useCallback(async (admin = false) => {
     setLoading(true);
     try {
       const data = admin ? await fetchCategories() : await fetchActiveCategories();
@@ -27,9 +29,15 @@ export function CategoriesProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  // muat kategori sekali saat provider pertama kali dibuka;
+  // dibungkus async IIFE agar setState tidak terjadi sinkron di dalam efek
+  useEffect(() => {
+    void (async () => {
+      await load();
+    })();
+  }, [load]);
 
   const create = async (input: Omit<Category, 'created_at' | 'updated_at'>) => {
     const n = await createCategory(input);

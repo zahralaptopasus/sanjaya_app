@@ -1,9 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, ScrollView, TouchableOpacity, Text, Image, StyleSheet } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, ScrollView, TouchableOpacity, Text, Image, StyleSheet, Linking, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Linking, Alert } from 'react-native';
 import type { CarouselSlide } from '../../lib/carousel';
-import type { Palette } from '../../theme';
 import { useColors } from '../../store/preferences';
 
 type CarouselSliderProps = {
@@ -23,7 +21,17 @@ export default function CarouselSlider({ slides, onSlidePress }: CarouselSliderP
     carouselWRef.current = carouselW;
   }, [carouselW]);
 
-  const startAuto = () => {
+  // stopAuto menghentikan timer autoplay; useCallback membuat fungsi ini stabil
+  // sehingga efek di bawah tidak perlu me-restart timer tanpa alasan
+  const stopAuto = useCallback(() => {
+    if (autoRef.current) {
+      clearInterval(autoRef.current);
+      autoRef.current = null;
+    }
+  }, []);
+
+  // startAuto memulai timer autoplay (ganti slide tiap 3 detik)
+  const startAuto = useCallback(() => {
     stopAuto();
     if (slides.length === 0) return;
     autoRef.current = setInterval(() => {
@@ -35,14 +43,7 @@ export default function CarouselSlider({ slides, onSlidePress }: CarouselSliderP
         return next;
       });
     }, 3000);
-  };
-
-  const stopAuto = () => {
-    if (autoRef.current) {
-      clearInterval(autoRef.current);
-      autoRef.current = null;
-    }
-  };
+  }, [slides.length, stopAuto]);
 
   const onCarouselScroll = (e: any) => {
     const w = carouselWRef.current;
@@ -62,7 +63,7 @@ export default function CarouselSlider({ slides, onSlidePress }: CarouselSliderP
   useEffect(() => {
     if (carouselW > 0) startAuto();
     return () => stopAuto();
-  }, [carouselW, slides.length]);
+  }, [carouselW, slides.length, startAuto, stopAuto]);
 
   if (slides.length === 0) return null;
 

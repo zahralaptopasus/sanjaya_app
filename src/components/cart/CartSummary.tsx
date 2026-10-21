@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, TextInput, StyleSheet, Animated, PanResponder } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { Palette } from '../../theme';
 import { useColors } from '../../store/preferences';
 import { rp } from '../../lib/format';
 

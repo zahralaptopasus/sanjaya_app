@@ -3,7 +3,6 @@ import { View, Text, TouchableOpacity, TextInput, StyleSheet } from 'react-nativ
 import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import type { CartItem } from '../../models';
-import type { Palette } from '../../theme';
 import { useColors } from '../../store/preferences';
 import { rp } from '../../lib/format';
 

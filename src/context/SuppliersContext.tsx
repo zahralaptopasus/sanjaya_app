@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
 import { adminGetSuppliers, adminGetAllSuppliers, adminAddSupplier, adminUpdateSupplier, adminDeleteSupplier, type Supplier, type SupplierInput } from '../lib/admin';
 
 interface SuppliersContextType {
@@ -18,7 +18,9 @@ export function SuppliersProvider({ children }: { children: ReactNode }) {
   const [allSuppliers, setAllSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = async (admin = false) => {
+  // useCallback membuat "load" stabil (tidak dibuat ulang tiap render) sehingga
+  // efek pemanggilnya hanya berjalan saat dependensinya berubah
+  const load = useCallback(async (admin = false) => {
     setLoading(true);
     try {
       const [active, all] = await Promise.all([
@@ -30,13 +32,13 @@ export function SuppliersProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void (async () => {
       await load(true);
     })();
-  }, []);
+  }, [load]);
 
   const create = async (input: SupplierInput): Promise<{ error?: string }> => {
     const result = await adminAddSupplier(input);

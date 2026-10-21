@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
 import { 
   fetchCarouselSlides, 
   fetchActiveCarouselSlides, 
@@ -26,7 +26,9 @@ export function CarouselProvider({ children }: { children: ReactNode }) {
   const [slides, setSlides] = useState<CarouselSlide[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = async (admin = false) => {
+  // useCallback membuat "load" stabil (tidak dibuat ulang tiap render) sehingga
+  // efek pemanggilnya hanya berjalan saat dependensinya berubah
+  const load = useCallback(async (admin = false) => {
     setLoading(true);
     try {
       const data = admin ? await fetchCarouselSlides() : await fetchActiveCarouselSlides();
@@ -36,7 +38,7 @@ export function CarouselProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     let active = true;

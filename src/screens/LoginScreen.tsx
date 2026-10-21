@@ -17,7 +17,6 @@ import {
   Platform,
   ScrollView,
   Image,
-  Alert,
 } from 'react-native';
 // mengambil kumpulan ikon Ionicons dari Expo
 import { Ionicons } from '@expo/vector-icons';
@@ -154,7 +153,12 @@ export default function LoginScreen() {
 
   // fungsi guest = masuk sebagai tamu (langsung memanggil enter)
   const guest = async () => {
-    enter();
+    setGuestLoading(true);
+    try {
+      enter();
+    } finally {
+      setGuestLoading(false);
+    }
   };
 
   // fungsi forgot = mengirim link reset kata sandi ke email pengguna
