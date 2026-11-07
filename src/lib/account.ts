@@ -33,6 +33,78 @@ export async function updateProfile(fields: ProfileFields): Promise<AccountResul
   return { ok: true };
 }
 
+// ===== USERNAME =====
+
+// aturan username: 3-20 karakter, huruf kecil, angka, titik, atau underscore
+export const USERNAME_PATTERN = /^[a-z0-9._]{3,20}$/;
+
+// samakan format username (buang spasi, huruf kecil)
+export function normalizeUsername(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+// validasi username; mengembalikan pesan error atau null bila valid
+export function usernameError(value: string): string | null {
+  const uname = normalizeUsername(value);
+  if (!uname) return 'Username wajib diisi';
+  if (!USERNAME_PATTERN.test(uname)) {
+    return 'Username 3-20 karakter, hanya huruf kecil, angka, titik, atau underscore';
+  }
+  return null;
+}
+
+// mengubah "email atau username" menjadi email yang dipakai Supabase Auth
+export async function resolveLoginEmail(identifier: string): Promise<string> {
+  const id = identifier.trim();
+  // kalau sudah berupa email, langsung pakai
+  if (id.includes('@')) return id;
+  // selain itu cari lewat RPC (security definer, aman dari RLS)
+  const { data, error } = await supabase.rpc('resolve_login_email', { p_identifier: id });
+  if (error) throw new Error('Username atau kata sandi salah');
+  const email = typeof data === 'string' ? data : null;
+  if (!email) throw new Error('Username atau kata sandi salah');
+  return email;
+}
+
+// cek apakah username masih tersedia
+export async function isUsernameAvailable(username: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('username_available', {
+    p_username: normalizeUsername(username),
+  });
+  if (error) {
+    throw new Error('Gagal memeriksa username. Pastikan migration username sudah dijalankan di Supabase.');
+  }
+  return data === true;
+}
+
+// ambil username milik user yang sedang login
+export async function getMyUsername(): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase
+    .from('profiles')
+    .select('username')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  return ((data as any)?.username as string | undefined) ?? null;
+}
+
+// simpan username baru (validasi + cek unik dilakukan di database)
+export async function setMyUsername(username: string): Promise<AccountResult> {
+  const uname = normalizeUsername(username);
+  const invalid = usernameError(uname);
+  if (invalid) return { ok: false, error: invalid };
+
+  const { error } = await supabase.rpc('set_my_username', { p_username: uname });
+  if (error) {
+    const msg = error.message.includes('set_my_username')
+      ? 'Fitur username belum aktif di server. Jalankan migration username.'
+      : error.message;
+    return { ok: false, error: msg };
+  }
+  return { ok: true };
+}
+
 // mengubah kata sandi; kata sandi lama diverifikasi lebih dulu
 export async function changePassword(current: string, next: string): Promise<AccountResult> {
   // ambil data user (butuh email untuk verifikasi sandi lama)

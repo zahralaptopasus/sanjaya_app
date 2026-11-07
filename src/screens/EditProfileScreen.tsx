@@ -13,8 +13,11 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 // Supabase untuk membaca data user
 import { supabase } from '../lib/supabase';
-// fungsi akun: ubah profil, ganti sandi, unggah/hapus foto
-import { updateProfile, changePassword, uploadAvatar, removeAvatar } from '../lib/account';
+// fungsi akun: ubah profil, ganti sandi, unggah/hapus foto, kelola username
+import {
+  updateProfile, changePassword, uploadAvatar, removeAvatar,
+  setMyUsername, normalizeUsername, usernameError,
+} from '../lib/account';
 // palet warna dinamis (Terang/Gelap) & font dari theme
 import { useColors } from '../store/preferences';
 import { F, type Palette } from '../theme';
@@ -62,6 +65,7 @@ function Field({ label, value, onChangeText, placeholder, keyboardType, secure, 
 export default function EditProfileScreen({ navigation }: any) {
   // state field profil
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   // url foto profil yang tersimpan
@@ -85,7 +89,8 @@ export default function EditProfileScreen({ navigation }: any) {
 
   // effect: ambil data user saat layar dibuka
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    void (async () => {
+      const { data } = await supabase.auth.getUser();
       const u = data.user;
       if (u) {
         const meta = (u.user_metadata ?? {}) as any;
@@ -93,9 +98,16 @@ export default function EditProfileScreen({ navigation }: any) {
         setPhone(meta.phone ?? '');
         setEmail(u.email ?? '');
         setAvatar(meta.avatar_url ?? null);
+        // username tersimpan di tabel profiles, bukan di metadata
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('user_id', u.id)
+          .maybeSingle();
+        setUsername(((profile as any)?.username as string | undefined) ?? '');
       }
       setLoading(false);
-    });
+    })();
   }, []);
 
   // notifikasi kecil (web pakai window.alert, native pakai Alert)
@@ -124,11 +136,22 @@ export default function EditProfileScreen({ navigation }: any) {
     if (!result.canceled && result.assets.length > 0) setPicked(result.assets[0]);
   };
 
-  // menyimpan perubahan profil (foto + nama + HP)
+  // menyimpan perubahan profil (username + foto + nama + HP)
   const saveProfile = async () => {
     if (!name.trim()) { notify('Belum lengkap', 'Nama wajib diisi.'); return; }
+    // validasi format username sebelum menyimpan apa pun
+    const uname = normalizeUsername(username);
+    const uErr = usernameError(uname);
+    if (uErr) { notify('Username tidak valid', uErr); return; }
+
     setSaving(true);
     try {
+      // simpan username lebih dulu; database juga mengecek apakah sudah dipakai
+      const unameRes = await setMyUsername(uname);
+      if (!unameRes.ok) {
+        notify('Gagal menyimpan username', unameRes.error ?? 'Coba lagi.');
+        return;
+      }
       // unggah foto dulu bila ada yang baru dipilih
       if (picked) {
         const up = await uploadAvatar({
@@ -220,6 +243,7 @@ export default function EditProfileScreen({ navigation }: any) {
         <Text style={styles.section}>Informasi Profil</Text>
         <View style={styles.card}>
           <Field label="Nama lengkap" value={name} onChangeText={setName} placeholder="Nama kamu" />
+          <Field label="Username (untuk login)" value={username} onChangeText={setUsername} placeholder="contoh: budi.santoso" />
           <Field label="Nomor HP" value={phone} onChangeText={setPhone} placeholder="08xxxxxxxxxx" keyboardType="phone-pad" />
           <Field label="Email (tidak dapat diubah)" value={email} onChangeText={() => {}} editable={false} />
         </View>

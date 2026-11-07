@@ -22,6 +22,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 // mengambil klien supabase (untuk autentikasi/daftar/login)
 import { supabase } from '../lib/supabase';
+// fungsi akun: validasi username & login memakai email/username
+import { isUsernameAvailable, normalizeUsername, resolveLoginEmail, usernameError } from '../lib/account';
 // mengambil hook palet warna dinamis (Terang/Gelap) dan tipe paletnya
 import { useColors } from '../store/preferences';
 import type { Palette } from '../theme';
@@ -47,7 +49,9 @@ export default function LoginScreen() {
   const [mode, setMode] = useState<Mode>('login');
   // state "name" menyimpan nama lengkap yang diketik pengguna (awal kosong)
   const [name, setName] = useState('');
-  // state "email" menyimpan email yang diketik pengguna (awal kosong)
+  // state "username" menyimpan username yang diketik saat daftar (awal kosong)
+  const [username, setUsername] = useState('');
+  // state "email" menyimpan email / username untuk login (awal kosong)
   const [email, setEmail] = useState('');
   // state "pass" menyimpan kata sandi yang diketik pengguna (awal kosong)
   const [pass, setPass] = useState('');
@@ -74,12 +78,17 @@ export default function LoginScreen() {
 
   // fungsi validate = memeriksa apakah isian sudah valid; mengembalikan pesan error atau null jika valid
   const validate = (): string | null => {
-    // saat mode daftar, nama wajib diisi
-    if (!isLogin && !name.trim()) return 'Nama wajib diisi';
-    // email wajib diisi
-    if (!email.trim()) return 'Email wajib diisi';
-    // email harus berformat benar (dicek dengan pola regex)
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return 'Format email tidak valid';
+    // aturan khusus mode daftar: nama, username, dan email valid
+    if (!isLogin) {
+      if (!name.trim()) return 'Nama wajib diisi';
+      const uErr = usernameError(username);
+      if (uErr) return uErr;
+      if (!email.trim()) return 'Email wajib diisi';
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return 'Format email tidak valid';
+    } else if (!email.trim()) {
+      // saat login, kolom ini boleh berisi email atau username
+      return 'Email atau username wajib diisi';
+    }
     // kata sandi wajib diisi
     if (!pass) return 'Kata sandi wajib diisi';
     // kata sandi minimal 6 karakter
@@ -105,20 +114,27 @@ export default function LoginScreen() {
     setErr(null);
     // blok try: coba jalankan, jika gagal lompat ke catch
     try {
-      // simpan email tanpa spasi di awal/akhir
-      const em = email.trim();
+      // kolom login boleh berisi email atau username
+      const identifier = email.trim();
       // jika mode login
       if (isLogin) {
-        // login memakai email + kata sandi lewat supabase; tunggu hasilnya
-        const { error } = await supabase.auth.signInWithPassword({ email: em, password: pass });
-        // jika ada error, lempar agar ditangkap catch
-        if (error) throw error;
+        // ubah username menjadi email (kalau inputnya email, dikembalikan apa adanya)
+        const loginEmail = await resolveLoginEmail(identifier);
+        // login memakai email hasil resolve + kata sandi
+        const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: pass });
+        // jangan bocorkan apakah username/email-nya ada atau sandinya salah
+        if (error) throw new Error('Email/username atau kata sandi salah');
       } else {
-        // jika mode daftar: buat akun baru beserta nama lengkap di data tambahan
+        // pastikan username belum dipakai orang lain
+        const uname = normalizeUsername(username);
+        const available = await isUsernameAvailable(uname);
+        if (!available) throw new Error('Username sudah dipakai, coba yang lain');
+
+        // jika mode daftar: buat akun baru beserta nama & username di data tambahan
         const { data, error } = await supabase.auth.signUp({
-          email: em,
+          email: identifier,
           password: pass,
-          options: { data: { full_name: name.trim() } },
+          options: { data: { full_name: name.trim(), username: uname } },
         });
         // jika ada error, lempar
         if (error) throw error;
@@ -128,13 +144,14 @@ export default function LoginScreen() {
           // akhiri sesi otomatis supaya pengguna login manual di halaman login
           await supabase.auth.signOut();
         }
-        // kosongkan isian nama dan kata sandi
+        // kosongkan isian nama, username, dan kata sandi
         setName('');
+        setUsername('');
         setPass('');
-        // isi kolom email dengan email baru agar pengguna tinggal mengetik kata sandi
-        setEmail(em);
+        // isi kolom login dengan username baru agar tinggal mengetik kata sandi
+        setEmail(uname);
         // tampilkan pesan info agar pengguna langsung login
-        setInfo('Akun berhasil dibuat! Silakan login dengan akun barumu.');
+        setInfo('Akun berhasil dibuat! Silakan login dengan username atau email.');
         // pindahkan mode ke login
         setMode('login');
         // hentikan fungsi di sini
@@ -163,20 +180,26 @@ export default function LoginScreen() {
 
   // fungsi forgot = mengirim link reset kata sandi ke email pengguna
   const forgot = async () => {
-    // ambil email tanpa spasi
-    const em = email.trim();
-    // jika email kosong, minta isi dulu
-    if (!em) {
-      setErr('Masukkan email dulu untuk reset kata sandi');
+    // kolom bisa berisi email atau username
+    const identifier = email.trim();
+    // jika kosong, minta isi dulu
+    if (!identifier) {
+      setErr('Masukkan email atau username dulu untuk reset kata sandi');
       return;
     }
     // bersihkan error
     setErr(null);
-    // minta supabase mengirim email reset kata sandi
-    const { error } = await supabase.auth.resetPasswordForEmail(em);
-    // jika error, tampilkan pesannya; jika berhasil, tampilkan info link terkirim
-    if (error) setErr(error.message);
-    else setErr('Link reset telah dikirim ke email (cek inbox/spam)');
+    try {
+      // ubah username menjadi email bila perlu
+      const em = await resolveLoginEmail(identifier);
+      // minta supabase mengirim email reset kata sandi
+      const { error } = await supabase.auth.resetPasswordForEmail(em);
+      // jika error, tampilkan pesannya; jika berhasil, tampilkan info link terkirim
+      if (error) setErr(error.message);
+      else setErr('Link reset telah dikirim ke email (cek inbox/spam)');
+    } catch (e: any) {
+      setErr(e?.message ?? 'Gagal mengirim link reset');
+    }
   };
 
   // fungsi googleLogin = masuk memakai akun Google (OAuth)
@@ -294,17 +317,41 @@ export default function LoginScreen() {
               </View>
             ) : null}
 
-            {/* baris isian berbentuk pil untuk email */}
+            {/* kolom username hanya muncul saat mode daftar */}
+            {!isLogin ? (
+              <View style={styles.pill}>
+                {/* ikon @ di kiri kolom */}
+                <Ionicons name="at-outline" size={16} color={c.textMuted} style={styles.pillIcon} />
+                {/* kolom isian username */}
+                <TextInput
+                  style={styles.pillInput}
+                  placeholder="Username (contoh: budi.santoso)"
+                  placeholderTextColor={c.textMuted}
+                  value={username}
+                  onChangeText={setUsername}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+            ) : null}
+
+            {/* baris isian berbentuk pil untuk email / username */}
             <View style={styles.pill}>
-              {/* ikon surat di kiri kolom */}
-              <Ionicons name="mail-outline" size={16} color={c.textMuted} style={styles.pillIcon} />
-              {/* kolom isian email */}
+              {/* ikon @ (login) atau surat (daftar) di kiri kolom */}
+              <Ionicons
+                name={isLogin ? 'at-outline' : 'mail-outline'}
+                size={16}
+                color={c.textMuted}
+                style={styles.pillIcon}
+              />
+              {/* kolom isian: email saat daftar, email/username saat login */}
               <TextInput
                 style={styles.pillInput}
-                placeholder="Email"
+                placeholder={isLogin ? 'Email atau username' : 'Email'}
                 placeholderTextColor={c.textMuted}
                 autoCapitalize="none"
-                keyboardType="email-address"
+                autoCorrect={false}
+                keyboardType={isLogin ? 'default' : 'email-address'}
                 value={email}
                 onChangeText={setEmail}
               />

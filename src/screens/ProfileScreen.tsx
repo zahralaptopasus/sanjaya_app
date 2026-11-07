@@ -118,6 +118,8 @@ export default function ProfileScreen({ navigation }: any) {
   const [name, setName] = useState('Pelanggan');
   // email user
   const [email, setEmail] = useState('');
+  // username user (dari tabel profiles)
+  const [username, setUsername] = useState('');
   // nomor HP user (dari metadata)
   const [phone, setPhone] = useState('');
   // url foto profil (dari metadata); null = pakai gambar bawaan
@@ -158,6 +160,13 @@ export default function ProfileScreen({ navigation }: any) {
       setPhone(meta.phone ?? '');
       // foto profil dari metadata (boleh null)
       setAvatar(meta.avatar_url ?? null);
+      // username diambil dari tabel profiles (sumber yang dipakai untuk login)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('user_id', u.id)
+        .maybeSingle();
+      setUsername(((profile as any)?.username as string | undefined) ?? '');
     }
     setLoading(false);
   }, [isGuest]);
@@ -277,6 +286,10 @@ export default function ProfileScreen({ navigation }: any) {
               <View style={{ flex: 1 }}>
                 <Text style={styles.pName} numberOfLines={1}>{loading ? 'Memuat…' : name}</Text>
                 <Text style={styles.pEmail} numberOfLines={1}>{loading ? ' ' : email || 'Pengguna'}</Text>
+                {username ? (
+                  // username yang dipakai untuk login
+                  <Text style={styles.pUsername} numberOfLines={1}>@{username}</Text>
+                ) : null}
                 {phone ? (
                   // nomor HP (hanya bila diisi)
                   <Text style={styles.pPhone} numberOfLines={1}>{phone}</Text>
@@ -343,6 +356,8 @@ const makeStyles = (c: Palette) => StyleSheet.create({
   pName: { fontSize: 16, fontFamily: F.bold, color: c.text },
   // email user
   pEmail: { fontSize: 12.5, fontFamily: F.regular, color: c.textMuted, marginTop: 2 },
+  // username untuk login
+  pUsername: { fontSize: 12.5, fontFamily: F.semibold, color: c.primary, marginTop: 2 },
   // nomor HP user
   pPhone: { fontSize: 12.5, fontFamily: F.regular, color: c.primary, marginTop: 2 },
   // judul kelompok menu
