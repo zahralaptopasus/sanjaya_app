@@ -35,6 +35,8 @@ import WorkshopIllustration from '../components/WorkshopIllustration';
 import * as WebBrowser from 'expo-web-browser';
 // mengambil makeRedirectUri (membuat alamat pengalihan setelah login OAuth selesai)
 import { makeRedirectUri } from 'expo-auth-session';
+// sesi admin lokal (login admin123 / 123456 tanpa Supabase, khusus demo)
+import { isLocalAdminCredential, setLocalAdmin } from '../lib/adminSession';
 
 // ===== TIPE DATA =====
 
@@ -118,6 +120,11 @@ export default function LoginScreen() {
       const identifier = email.trim();
       // jika mode login
       if (isLogin) {
+        // login admin lokal (khusus demo): admin123 / 123456 langsung masuk area admin
+        if (isLocalAdminCredential(identifier, pass)) {
+          setLocalAdmin(true);
+          return;
+        }
         // ubah username menjadi email (kalau inputnya email, dikembalikan apa adanya)
         const loginEmail = await resolveLoginEmail(identifier);
         // login memakai email hasil resolve + kata sandi

@@ -264,6 +264,17 @@ export default function ReceiptScreen({ navigation, route }: any) {
     try {
       // generate HTML untuk struk
       const html = generateHTML({ items, name, phone, plat, orderId, paidAt, subtotal, discount, coupon, totalBayar, code, paymentMethod: methodLabel });
+      // di web: expo-print tidak bisa membuat file PDF → buka dialog print browser
+      if (Platform.OS === 'web') {
+        const w = window.open('', '_blank');
+        if (w) {
+          w.document.write(html);
+          w.document.close();
+          w.focus();
+          w.print();
+        }
+        return;
+      }
       // mencetak HTML menjadi file PDF
       const { uri } = await Print.printToFileAsync({ html });
       // membagikan/simpan file PDF

@@ -51,6 +51,12 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 // Klien Supabase (autentikasi & database)
 import { supabase } from './src/lib/supabase';
+// Sesi admin lokal (login admin123 / 123456 tanpa Supabase, khusus demo)
+import {
+  isLocalAdmin,
+  setLocalAdmin,
+  subscribeLocalAdmin,
+} from './src/lib/adminSession';
 
 // ===== STATE STORES =====
 // CartProvider & useCart: data keranjang (item, qty, diskon, total, itemCount)
@@ -489,6 +495,8 @@ export default function App() {
   const [session, setSession] = useState<any>(null);
   // Penanda role admin
   const [isAdmin, setIsAdmin] = useState(false);
+  // Penanda admin lokal (login admin123 / 123456 tanpa Supabase)
+  const [localAdmin, setLocalAdminState] = useState(isLocalAdmin());
   // Mode gelap/terang sistem (untuk fallback loading screen)
   const scheme = useColorScheme();
 
@@ -519,9 +527,14 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Effect: ikuti perubahan status admin lokal (login admin123 / 123456)
+  useEffect(() => subscribeLocalAdmin(setLocalAdminState), []);
+
   // Logout
   const handleSignOut = () => {
     setIsAdmin(false);
+    // keluar juga dari sesi admin lokal
+    setLocalAdmin(false);
     setSession(null);
     supabase.auth.signOut({ scope: 'local' }).catch(() => {});
   };
@@ -571,7 +584,7 @@ export default function App() {
                       <SuppliersProvider>
                         <AppRoot
                           session={!!session}
-                          isAdmin={isAdmin}
+                          isAdmin={isAdmin || localAdmin}
                           onSignOut={handleSignOut}
                         />
                       </SuppliersProvider>
@@ -630,10 +643,10 @@ function AppRoutes({
   onSignOut: () => void;
 }) {
   const { isGuest } = useGuest();
+  // Admin (termasuk login lokal admin123/123456 tanpa Supabase) → stack admin
+  if (isAdmin) return <AdminStack onSignOut={onSignOut} />;
   // Belum login & bukan tamu → tampilkan login
   if (!session && !isGuest) return <LoginStack />;
-  // Admin → tampilkan stack admin
-  if (isAdmin) return <AdminStack onSignOut={onSignOut} />;
   // Lainnya (pelanggan login / tamu) → tampilkan stack pelanggan
   return <AuthedStack />;
 }
