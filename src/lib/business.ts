@@ -13,7 +13,7 @@ export const business = {
   description:
     'Santren Jaya Motor (Sanjaya) menyediakan sparepart motor asli, oli, dan layanan servis berkala. Belanja mudah lewat aplikasi, pesanan diproses cepat dan aman.',
   // alamat toko (placeholder)
-  address: 'Jl. Contoh Raya No. 123, Yogyakarta 55123',
+  address: 'Jl. Sitirejo Temu, Lemah Duwur, Kec. wagir Kab. Malang, Jawa Timur 3507',
   // nomor telepon yang tampil (placeholder)
   phone: '+62 812-3456-7890',
   // nomor WhatsApp format internasional tanpa tanda plus/spasi (placeholder)
@@ -22,9 +22,9 @@ export const business = {
   email: 'cs@santrenjayamotor.example',
   // jam operasional (placeholder)
   hours: [
-    { day: 'Senin - Jumat', time: '08.00 - 17.00' },
-    { day: 'Sabtu', time: '08.00 - 15.00' },
-    { day: 'Minggu & Hari Libur', time: 'Tutup' },
+    { day: 'Senin - Kamis', time: '08.00 - 16.00' },
+    { day: 'Jumat Libur',},
+    { day: 'Sabtu sampai Minggu', time: '08.00 - 17.00' },
   ],
   // versi aplikasi yang ditampilkan
   version: '1.0.0',

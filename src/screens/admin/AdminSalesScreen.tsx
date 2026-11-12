@@ -90,12 +90,21 @@ const generateReceiptHTML = (sale: any) => {
     <div class="footer">
       No. Transaksi: ${htmlEscape(String(sale.code))}<br/>
       Waktu: ${longDateTime(String(sale.createdAt))}<br/>
+      Metode: ${htmlEscape(methodLabel(sale.paymentMethod))}<br/>
       Terima kasih telah berbelanja di Sanjaya Motor.
     </div>
   </body></html>`;
 };
-const statusLabel = (s: string) =>
-  s === "paid" ? "Lunas" : s === "pending" ? "Menunggu" : s;
+// label metode pembayaran
+const methodLabel = (m?: string) => (m === "cod" ? "Tunai (COD)" : "Midtrans (Online)");
+const statusLabel = (s: string, method?: string) =>
+  s === "paid"
+    ? "Lunas"
+    : s === "pending"
+      ? method === "cod"
+        ? "COD • Belum bayar"
+        : "Menunggu"
+      : s;
 const statusColors = (s: string) =>
   s === "pending"
     ? { bg: "#FFF8CC", fg: "#8A6D00" }
@@ -268,6 +277,7 @@ export default function AdminSalesScreen() {
           user_id: user?.id ?? "00000000-0000-0000-0000-000000000000",
           code,
           status: "paid",
+          payment_method: "cod",
           total: orderTotal,
         })
         .select()
@@ -320,7 +330,7 @@ export default function AdminSalesScreen() {
   const handleShareText = async (sale: any) => {
     const items = (sale.items ?? []) as { name: string; qty: number; price: number }[];
     const txt =
-      `STRUK PENJUALAN\nSANJAYA Motor\nNo: ${sale.code}\nWaktu: ${longDateTime(String(sale.createdAt))}\n\n` +
+      `STRUK PENJUALAN\nSANJAYA Motor\nNo: ${sale.code}\nWaktu: ${longDateTime(String(sale.createdAt))}\nMetode: ${methodLabel(sale.paymentMethod)}\n\n` +
       items.map((it) => `${it.name} x${it.qty} = ${rp(it.price * it.qty)}`).join("\n") +
       `\n\nTotal = ${rp(sale.total)}\nTerima kasih!`;
     try {
@@ -468,10 +478,10 @@ export default function AdminSalesScreen() {
                 <View style={styles.saleTop}>
                   <Text style={styles.saleCode}>{s.code}</Text>
                   <View style={[styles.statusChip, { backgroundColor: sc.bg }]}>
-                    <Text style={[styles.statusText, { color: sc.fg }]}>{statusLabel(s.status)}</Text>
+                    <Text style={[styles.statusText, { color: sc.fg }]}>{statusLabel(s.status, s.paymentMethod)}</Text>
                   </View>
                 </View>
-                <Text style={styles.saleDate}>{shortDate(s.createdAt)}</Text>
+                <Text style={styles.saleDate}>{shortDate(s.createdAt)} · {methodLabel(s.paymentMethod)}</Text>
 
                 <View style={styles.dashed} />
 
@@ -697,6 +707,11 @@ export default function AdminSalesScreen() {
                     </View>
                   </View>
 
+                  <View style={{ marginTop: 8 }}>
+                    <Text style={styles.miniLabel}>Metode Pembayaran</Text>
+                    <Text style={styles.receiptMeta}>{methodLabel(receipt.paymentMethod)}</Text>
+                  </View>
+
                   <View style={styles.dashed} />
 
                   {(receipt.items ?? []).map((it: any, i: number) => (
@@ -721,7 +736,7 @@ export default function AdminSalesScreen() {
                     ]}
                   >
                     <Text style={[styles.statusText, { color: statusColors(receipt.status).fg }]}>
-                      {statusLabel(receipt.status)}
+                      {statusLabel(receipt.status, receipt.paymentMethod)}
                     </Text>
                   </View>
                 </View>

@@ -365,6 +365,7 @@ export async function adminGetSales({ startDate, endDate }: { startDate?: string
     id: String(o.id),
     code: String(o.code),
     status: String(o.status),
+    paymentMethod: String(o.payment_method ?? 'midtrans'),
     total: Number(o.total),
     createdAt: String(o.created_at),
     items: ((o.order_items as any[]) ?? []).map((i) => ({

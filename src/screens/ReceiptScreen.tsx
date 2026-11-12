@@ -19,8 +19,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 // mengambil modul expo-sharing untuk membagikan file PDF
 import * as Sharing from 'expo-sharing';
-// mengambil fungsi status pesanan, URL pembayaran, pembatalan, dan daftar produk (untuk "Bayar Lagi") dari repo
-import { getOrderStatus, getOrderSnapUrl, cancelOrder, getProducts } from '../repo';
+// mengambil fungsi status pesanan, metode pembayaran, URL pembayaran, pembatalan, dan daftar produk (untuk "Bayar Lagi") dari repo
+import { getOrderStatus, getOrderPaymentMethod, getOrderSnapUrl, cancelOrder, getProducts } from '../repo';
 // mengambil hook useCart (untuk menyiapkan ulang item saat "Bayar Lagi" langsung ke Checkout)
 import { useCart } from '../store/cart';
 
@@ -54,7 +54,7 @@ function htmlEscape(s: string) {
 // fungsi untuk membuat HTML struk (digunakan oleh expo-print untuk generate PDF)
 function generateHTML(params: any) {
   // mengambil parameter yang dibutuhkan untuk generate struk
-  const { items, name, phone, plat, orderId, paidAt, subtotal, discount, coupon, totalBayar, code } = params;
+  const { items, name, phone, plat, orderId, paidAt, subtotal, discount, coupon, totalBayar, code, paymentMethod } = params;
   // membuat objek Date dari waktu pembayaran
   const date = new Date(paidAt);
   // membuat baris tabel untuk setiap item belanja
@@ -111,6 +111,7 @@ function generateHTML(params: any) {
     <div class="footer">
       No. Transaksi: ${code}<br/>
       Waktu: ${String(date.getDate()).padStart(2,'0')} ${date.toLocaleString('id',{month:'short'})} ${date.getFullYear()}, ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')} WIB<br/>
+      Metode: ${htmlEscape(String(paymentMethod ?? 'Midtrans (Online)'))}<br/>
       Pelanggan: ${htmlEscape(name)}${phone ? ` | ${htmlEscape(phone)}` : ''} | Plat: ${htmlEscape(plat)}<br/>
       Terima kasih telah berbelanja di Sanjaya Motor.
     </div>
@@ -145,6 +146,10 @@ export default function ReceiptScreen({ navigation, route }: any) {
     subtotal: paramSubtotal,
     // diskon yang diterapkan
     discount: paramDiscount,
+    // metode pembayaran yang dikirim dari Checkout / Riwayat ('midtrans' | 'cod')
+    paymentMethod: paramPaymentMethod,
+    // status awal (mis. COD 'pending') agar struk tidak sempat menampilkan status lain
+    initialStatus,
   } = route?.params ?? {};
 
   // menyiapkan daftar item untuk struk; jika tidak ada parameter, pakai data demo
@@ -181,7 +186,12 @@ export default function ReceiptScreen({ navigation, route }: any) {
   // state penanda sedang menyiapkan "Bayar Lagi" (memuat produk & membuka Checkout)
   const [retrying, setRetrying] = React.useState(false);
   // state status asli pesanan dari database; null = belum dimuat / bukan order database
-  const [dbStatus, setDbStatus] = React.useState<string | null>(null);
+  // bila initialStatus dikirim (mis. COD pending), pakai nilai itu agar tampilan langsung tepat
+  const [dbStatus, setDbStatus] = React.useState<string | null>(
+    initialStatus ? String(initialStatus) : null,
+  );
+  // state metode pembayaran dari database; null = belum dimuat / bukan order database
+  const [dbPaymentMethod, setDbPaymentMethod] = React.useState<string | null>(null);
   // mengambil objek keranjang belanja (untuk menyiapkan ulang item saat "Bayar Lagi")
   const cart = useCart();
   // palet warna aktif + gaya yang dihitung ulang saat tema berganti
@@ -213,6 +223,20 @@ export default function ReceiptScreen({ navigation, route }: any) {
     return () => { active = false; clearInterval(timer); };
   }, [isRealOrder, orderId, dbId]);
 
+  // effect: ambil metode pembayaran dari database (untuk memastikan COD/Midtrans akurat
+  // meskipun struk dibuka langsung dari Riwayat Pesanan)
+  useEffect(() => {
+    // hanya untuk order asli dari database
+    if (!isRealOrder) return;
+    // flag agar tidak setState setelah layar ditutup
+    let active = true;
+    getOrderPaymentMethod(String(dbId ?? orderId)).then((m) => {
+      if (active) setDbPaymentMethod(m);
+    });
+    // bersihkan flag saat layar ditutup / order berubah
+    return () => { active = false; };
+  }, [isRealOrder, orderId, dbId]);
+
   // menentukan status tampilan struk berdasarkan status database
   // s berisi status DB (lowercase); jika tidak ada data, anggap sudah lunas (perilaku lama)
   const s = String(dbStatus ?? '').toLowerCase();
@@ -223,13 +247,23 @@ export default function ReceiptScreen({ navigation, route }: any) {
   // statusFailed: gagal / batal / lainnya
   const statusFailed = !statusPaid && !statusPending;
 
+  // metode pembayaran efektif: database > parameter > default Midtrans
+  const paymentMethod: 'midtrans' | 'cod' =
+    (dbPaymentMethod ?? paramPaymentMethod) === 'cod' ? 'cod' : 'midtrans';
+  // apakah pesanan memakai tunai di tempat
+  const isCod = paymentMethod === 'cod';
+  // label metode pembayaran untuk tampilan & PDF
+  const methodLabel = isCod ? 'Tunai di Tempat (COD)' : 'Midtrans (Online)';
+  // COD yang masih menunggu pembayaran tunai
+  const codPending = isCod && statusPending;
+
   // fungsi untuk membuat dan membagikan PDF struk via expo-print & expo-sharing
   const handlePrint = async () => {
     // menandakan sedang mencetak
     setPrinting(true);
     try {
       // generate HTML untuk struk
-      const html = generateHTML({ items, name, phone, plat, orderId, paidAt, subtotal, discount, coupon, totalBayar, code });
+      const html = generateHTML({ items, name, phone, plat, orderId, paidAt, subtotal, discount, coupon, totalBayar, code, paymentMethod: methodLabel });
       // mencetak HTML menjadi file PDF
       const { uri } = await Print.printToFileAsync({ html });
       // membagikan/simpan file PDF
@@ -247,7 +281,7 @@ export default function ReceiptScreen({ navigation, route }: any) {
   // fungsi untuk membagikan struk dalam bentuk teks
   const handleShareText = async () => {
     // menyusun isi teks struk
-    const txt = `STRUK PEMBAYARAN\nSANJAYA Motor\nNo: ${code}\nTanggal: ${date.toLocaleString('id')}\nNama: ${name}\n${phone ? 'HP: ' + phone + '\n' : ''}Plat: ${plat}\n\n${items.map(e => `${e.product.name} x${e.qty} = ${rp(e.product.price * e.qty)}`).join('\n')}\nJasa Pasang = ${rp(SERVICE_FEE)}\n${coupon ? `Diskon ${coupon} = -${rp(discount)}\n` : ''}Total Bayar = ${rp(totalBayar)}\nKode: ${orderId}\nTerima kasih!`;
+    const txt = `STRUK PEMBAYARAN\nSANJAYA Motor\nNo: ${code}\nTanggal: ${date.toLocaleString('id')}\nMetode: ${methodLabel}\nNama: ${name}\n${phone ? 'HP: ' + phone + '\n' : ''}Plat: ${plat}\n\n${items.map(e => `${e.product.name} x${e.qty} = ${rp(e.product.price * e.qty)}`).join('\n')}\nJasa Pasang = ${rp(SERVICE_FEE)}\n${coupon ? `Diskon ${coupon} = -${rp(discount)}\n` : ''}Total Bayar = ${rp(totalBayar)}\nKode: ${orderId}\nTerima kasih!`;
     try { await Share.share({ message: txt, title: 'Struk Pembayaran' }); } catch {}
   };
 
@@ -328,7 +362,7 @@ export default function ReceiptScreen({ navigation, route }: any) {
           <View style={[styles.check, { backgroundColor: statusFailed ? c.danger + '33' : statusPending ? c.accent + '66' : c.primarySoft }]}>
             {/* ikon sesuai status: silang (gagal), jam pasir (menunggu), centang (berhasil) */}
             <Ionicons
-              name={statusFailed ? 'close' : statusPending ? 'hourglass-outline' : 'checkmark'}
+              name={statusFailed ? 'close' : codPending ? 'cash-outline' : statusPending ? 'hourglass-outline' : 'checkmark'}
               size={30}
               color={statusFailed ? c.danger : statusPending ? c.warn : c.warn}
             />
@@ -336,12 +370,14 @@ export default function ReceiptScreen({ navigation, route }: any) {
         </View>
         {/* judul sesuai status */}
         <Text style={{ fontSize: 22, fontFamily: 'Inter_800ExtraBold',  color: c.text, marginTop: 8 }}>
-          {statusFailed ? 'Pembayaran Gagal' : statusPending ? 'Menunggu Pembayaran' : 'Pembayaran Berhasil!'}
+          {statusFailed ? 'Pembayaran Gagal' : codPending ? 'Pesanan Dibuat' : statusPending ? 'Menunggu Pembayaran' : 'Pembayaran Berhasil!'}
         </Text>
         {/* keterangan sesuai status */}
         <Text style={{ textAlign: 'center', color: c.textMuted, fontSize: 13, marginTop: 4 }}>
           {statusFailed
             ? 'Pembayaran tidak selesai. Silakan cek Riwayat Pesanan atau ulangi pemesanan.'
+            : codPending
+            ? 'Silakan bayar tunai saat pengambilan unit motor. Status otomatis menjadi LUNAS setelah admin mengonfirmasi — cek Riwayat Pesanan.'
             : statusPending
             ? 'Pembayaran sedang diverifikasi. Status otomatis menjadi Lunas setelah dikonfirmasi — cek Riwayat Pesanan.'
             : 'Terima kasih, pesanan Anda telah diverifikasi oleh tim Sanjaya Motor.'}
@@ -364,7 +400,7 @@ export default function ReceiptScreen({ navigation, route }: any) {
             {/* badge status: LUNAS / MENUNGGU / GAGAL sesuai status database */}
             <View style={statusFailed ? styles.badgeFailed : statusPending ? styles.badgePending : styles.lunas}>
               <Text style={statusFailed ? styles.badgeFailedText : statusPending ? styles.badgePendingText : styles.lunasText}>
-                {statusFailed ? 'GAGAL' : statusPending ? 'MENUNGGU' : 'LUNAS'}
+                {statusFailed ? 'GAGAL' : codPending ? 'BAYAR DI TEMPAT' : statusPending ? 'MENUNGGU' : 'LUNAS'}
               </Text>
             </View>
           </View>
@@ -426,6 +462,10 @@ export default function ReceiptScreen({ navigation, route }: any) {
             <Text style={styles.section}>Ringkasan</Text>
           </View>
           <View style={styles.lineRow}>
+            <Text style={{ fontSize: 13, color: c.textMuted }}>Metode Pembayaran</Text>
+            <Text style={{ fontFamily: 'Inter_700Bold', color: isCod ? c.warn : c.primary }}>{methodLabel}</Text>
+          </View>
+          <View style={styles.lineRow}>
             <Text style={{ fontSize: 13, color: c.textMuted }}>Total Nilai Barang & Jasa</Text>
             <Text style={{ fontFamily: 'Inter_600SemiBold'}}>{rp(totalBarang)}</Text>
           </View>
@@ -438,7 +478,7 @@ export default function ReceiptScreen({ navigation, route }: any) {
           <View style={[styles.lineRow, { marginTop: 8 }]}>
             <View>
               <Text style={{ fontFamily: 'Inter_800ExtraBold',  fontSize: 14, color: c.text }}>Total Bayar</Text>
-              <Text style={{ fontSize: 11, color: c.textMuted }}>QRIS Ref #QR-99214710</Text>
+              <Text style={{ fontSize: 11, color: c.textMuted }}>{methodLabel}</Text>
             </View>
             <Text style={{ fontSize: 22, fontFamily: 'Inter_900Black',  color: c.primary }}>{rp(totalBayar)}</Text>
           </View>
@@ -479,12 +519,22 @@ export default function ReceiptScreen({ navigation, route }: any) {
       {/* tombol lanjutkan pembayaran + batalkan khusus saat pesanan masih menunggu */}
       {statusPending ? (
         <View style={{ alignItems: 'center', marginTop: 16 }}>
-          {/* tombol membuka halaman pembayaran Midtrans */}
-          <TouchableOpacity style={styles.btnPrimary} onPress={handleOpenPayment} disabled={opening}>
-            {opening
-              ? <ActivityIndicator color="#fff" size="small" />
-              : <Text style={{ color: '#fff', fontFamily: 'Inter_700Bold'}}>Buka Halaman Pembayaran</Text>}
-          </TouchableOpacity>
+          {/* COD: tidak ada halaman Midtrans — tampilkan instruksi bayar tunai */}
+          {isCod ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.accent + '22', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 }}>
+              <Ionicons name="cash-outline" size={18} color={c.warn} />
+              <Text style={{ color: c.warn, fontSize: 12, fontFamily: 'Inter_700Bold', flexShrink: 1 }}>
+                Bayar tunai di toko saat pengambilan unit.
+              </Text>
+            </View>
+          ) : (
+            /* tombol membuka halaman pembayaran Midtrans */
+            <TouchableOpacity style={styles.btnPrimary} onPress={handleOpenPayment} disabled={opening}>
+              {opening
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={{ color: '#fff', fontFamily: 'Inter_700Bold'}}>Buka Halaman Pembayaran</Text>}
+            </TouchableOpacity>
+          )}
           {/* tombol membatalkan pesanan menunggu */}
           <TouchableOpacity
             style={{ marginTop: 10, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, borderWidth: 1.5, borderColor: c.danger }}

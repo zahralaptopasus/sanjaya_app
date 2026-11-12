@@ -43,7 +43,7 @@ const SLIDES: Slide[] = [
     img: require('../../assets/images/onboarding_2.png'),
     t1: 'Belanja Mudah,',
     t2: 'Bayar Aman',
-    desc: 'Tambah ke keranjang lalu bayar lewat transfer, e-wallet, atau QRIS.',
+    desc: 'Tambah ke keranjang lalu bayar lewat transfer, e-wallet, QRIS, atau tunai di toko (COD).',
   },
   {
     // gambar slide ketiga

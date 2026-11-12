@@ -17,7 +17,7 @@ import { F, type Palette } from '../theme';
 // daftar pertanyaan yang sering diajukan
 const FAQ: { q: string; a: string }[] = [
   { q: 'Bagaimana cara memesan sparepart?', a: 'Pilih produk di tab Belanja, masukkan ke keranjang, lalu lanjutkan ke pembayaran.' },
-  { q: 'Metode pembayaran apa yang tersedia?', a: 'Pembayaran online melalui Midtrans (transfer bank, e-wallet, QRIS, dan kartu).' },
+  { q: 'Metode pembayaran apa yang tersedia?', a: 'Pembayaran online melalui Midtrans (transfer bank, e-wallet, QRIS, dan kartu), atau bayar tunai di tempat (COD) saat pengambilan di toko.' },
   { q: 'Apakah pesanan bisa dikirim?', a: 'Bisa. Isi alamat pengiriman saat checkout, atau hubungi kami untuk pengambilan di toko.' },
   { q: 'Bagaimana cara memeriksa status pesanan?', a: 'Buka tab Pesanan untuk melihat status tiap pesanan (menunggu pembayaran, lunas, atau gagal).' },
   { q: 'Bagaimana jika stok produk habis?', a: 'Anda bisa menghubungi kami; kami akan mengabari ketika barang tersedia kembali.' },

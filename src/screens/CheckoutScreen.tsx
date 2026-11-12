@@ -57,6 +57,8 @@ export default function CheckoutScreen({ navigation }: any) {
   const [cancelling, setCancelling] = useState(false);
   // state pesan error pada layar status (mis. gagal membatalkan)
   const [payErr, setPayErr] = useState<string | null>(null);
+  // metode pembayaran yang dipilih: Midtrans (online) atau COD (tunai di tempat)
+  const [method, setMethod] = useState<'midtrans' | 'cod'>('midtrans');
   // kode pesanan dibangkitkan via Date.now() - diambil 6 digit terakhir untuk menghasilkan kode unik
   // memakai useState dengan lazy initializer supaya kode dibuat SATU KALI saat layar dibuka
   // (bukan di tiap render, dan bukan dengan membaca .current ref saat render)
@@ -95,6 +97,10 @@ export default function CheckoutScreen({ navigation }: any) {
       subtotal: cart.selectedSubtotal,
       // nilai diskon (dari item terpilih)
       discount: cart.selectedDiscount,
+      // metode pembayaran yang dipilih (dipakai struk untuk membedakan Midtrans / COD)
+      paymentMethod: method,
+      // COD dimulai dari status pending agar struk tidak sempat menampilkan "Berhasil"
+      ...(method === 'cod' ? { initialStatus: 'pending' } : {}),
     };
     // menghapus HANYA item yang dibeli (terpilih) dari keranjang saat lunas;
     // item yang tidak dicentang tetap tersimpan untuk dibeli nanti
@@ -150,12 +156,15 @@ export default function CheckoutScreen({ navigation }: any) {
     }
     // bersihkan pesan error bila isian sudah valid
     setErr(null);
+    // apakah pembayaran tunai di tempat (COD) — tidak perlu halaman Midtrans
+    const isCod = method === 'cod';
     // menandakan proses pembayaran sedang berjalan
     setPaying(true);
     // di web: buka tab kosong SEGERA (masih dalam gestur klik) agar tidak diblokir popup blocker
-    const win = Platform.OS === 'web' ? window.open('', '_blank') : null;
+    // tab hanya diperlukan untuk Midtrans; COD langsung ke struk
+    const win = !isCod && Platform.OS === 'web' ? window.open('', '_blank') : null;
     // catat bila popup awal gagal dibuka (mis. diblokir) untuk hint di layar status
-    if (Platform.OS === 'web' && !win) setWebOpenFailed(true);
+    if (!isCod && Platform.OS === 'web' && !win) setWebOpenFailed(true);
     // membuat order baru di database via API; mengirim kode, item, subtotal, diskon, total
     const dbOrderId = await createOrder({
       code: orderCode,
@@ -175,7 +184,16 @@ export default function CheckoutScreen({ navigation }: any) {
       discount: cart.selectedDiscount,
       // total yang harus dibayar (item terpilih)
       total: cart.selectedTotal,
+      // kirim metode pembayaran ke database
+      paymentMethod: method,
     });
+
+    // database belum menjalankan migration COD
+    if (dbOrderId === 'MIGRATION_REQUIRED') {
+      setPaying(false);
+      setErr('Database belum mendukung pembayaran COD. Jalankan migration 20261107_cod_payment.sql di Supabase.');
+      return;
+    }
 
     // jika stok barang tidak cukup
     if (dbOrderId === 'STOK_KURANG') {
@@ -192,6 +210,17 @@ export default function CheckoutScreen({ navigation }: any) {
       setPaying(false);
       // menampilkan alert gagal membuat pesanan
       Alert.alert('Gagal', 'Tidak bisa membuat pesanan. Coba lagi.');
+      return;
+    }
+
+    // ===== COD: pesanan langsung dibuat, tanpa halaman pembayaran Midtrans =====
+    if (isCod) {
+      // simpan ID order untuk keperluan struk
+      orderIdRef.current = dbOrderId;
+      // hentikan indikator loading
+      setPaying(false);
+      // buka struk sebagai pesanan COD yang menunggu pembayaran di tempat
+      goReceipt(dbOrderId, true);
       return;
     }
 
@@ -505,36 +534,60 @@ export default function CheckoutScreen({ navigation }: any) {
           {/* header kartu metode */}
           <View style={styles.cardHeadRow}>
             <View style={styles.cardIcon}>
-              <Ionicons name="shield-checkmark" size={20} color={c.primary} />
+              <Ionicons name="wallet-outline" size={20} color={c.primary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.cardTitle}>Metode Pembayaran</Text>
-              <Text style={styles.cardSub}>via Midtrans • transaksi aman</Text>
+              <Text style={styles.cardSub}>Pilih cara bayar pesananmu</Text>
             </View>
           </View>
-          {/* deretan pill metode pembayaran */}
-          <View style={styles.methodRow}>
-            {/* pill QRIS */}
-            <View style={styles.methodChip}>
-              <Ionicons name="qr-code" size={15} color={c.warn} />
-              <Text style={styles.methodChipText}>QRIS</Text>
+
+          {/* opsi 1: Midtrans (online) */}
+          <TouchableOpacity
+            style={[styles.methodOption, method === 'midtrans' && styles.methodOptionActive]}
+            onPress={() => setMethod('midtrans')}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.radio, method === 'midtrans' && styles.radioActive]}>
+              {method === 'midtrans' ? <View style={styles.radioDot} /> : null}
             </View>
-            {/* pill Virtual Account */}
-            <View style={styles.methodChip}>
-              <Ionicons name="card-outline" size={15} color={c.warn} />
-              <Text style={styles.methodChipText}>Virtual Account</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.methodTitle}>Midtrans (Online)</Text>
+              <Text style={styles.methodDesc}>QRIS, Virtual Account, GoPay, kartu</Text>
             </View>
-            {/* pill GoPay */}
-            <View style={styles.methodChip}>
-              <Ionicons name="phone-portrait" size={15} color={c.warn} />
-              <Text style={styles.methodChipText}>GoPay</Text>
+            <Ionicons name="shield-checkmark-outline" size={18} color={c.primary} />
+          </TouchableOpacity>
+
+          {/* opsi 2: Tunai di tempat / COD */}
+          <TouchableOpacity
+            style={[styles.methodOption, method === 'cod' && styles.methodOptionActive]}
+            onPress={() => setMethod('cod')}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.radio, method === 'cod' && styles.radioActive]}>
+              {method === 'cod' ? <View style={styles.radioDot} /> : null}
             </View>
-          </View>
-          {/* catatan kecil keamanan */}
-          <View style={styles.secureRow}>
-            <Ionicons name="lock-closed" size={12} color={c.textMuted} />
-            <Text style={styles.secureText}>Hanya pembayaran asli yang akan diverifikasi.</Text>
-          </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.methodTitle}>Tunai di Tempat (COD)</Text>
+              <Text style={styles.methodDesc}>Bayar tunai saat ambil barang di toko</Text>
+            </View>
+            <Ionicons name="cash-outline" size={18} color={c.warn} />
+          </TouchableOpacity>
+
+          {/* catatan sesuai metode terpilih */}
+          {method === 'cod' ? (
+            <View style={styles.codNote}>
+              <Ionicons name="information-circle" size={14} color={c.warn} />
+              <Text style={styles.codNoteText}>
+                Stok dipesan sekarang. Bayar saat pengambilan; admin akan menandai LUNAS.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.secureRow}>
+              <Ionicons name="lock-closed" size={12} color={c.textMuted} />
+              <Text style={styles.secureText}>Hanya pembayaran asli yang akan diverifikasi.</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -550,6 +603,11 @@ export default function CheckoutScreen({ navigation }: any) {
           {/* saat proses pembayaran tampil spinner, jika tidak tampil ikon gembok + teks */}
           {paying ? (
             <ActivityIndicator color="#261A00" />
+          ) : method === 'cod' ? (
+            <>
+              <Ionicons name="cash-outline" size={16} color="#261A00" />
+              <Text style={styles.payBtnText}>Pesan & Bayar di Tempat</Text>
+            </>
           ) : (
             <>
               <Ionicons name="lock-closed" size={16} color="#261A00" />
@@ -630,6 +688,27 @@ const makeStyles = (c: Palette) => StyleSheet.create({
   methodChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: c.chip, borderWidth: 1, borderColor: c.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
   // teks pill metode: ukuran 11, tebal, warna kuning gelap
   methodChipText: { fontSize: 11, fontFamily: 'Inter_700Bold', color: c.warn },
+  // kartu pilihan metode pembayaran (Midtrans / COD)
+  methodOption: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderColor: c.border,
+    borderRadius: 12, padding: 12, marginBottom: 10, backgroundColor: c.card,
+  },
+  // kartu metode yang sedang dipilih
+  methodOptionActive: { borderColor: c.primary, backgroundColor: c.primarySoft },
+  // lingkaran radio pilihan
+  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: c.border, alignItems: 'center', justifyContent: 'center' },
+  // lingkaran radio aktif
+  radioActive: { borderColor: c.primary },
+  // titik di dalam radio aktif
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: c.primary },
+  // judul metode
+  methodTitle: { fontSize: 14, fontFamily: 'Inter_800ExtraBold', color: c.text },
+  // keterangan metode
+  methodDesc: { fontSize: 11, color: c.textMuted, marginTop: 2 },
+  // kotak info COD
+  codNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, backgroundColor: c.chip, borderRadius: 10, padding: 10, marginTop: 2 },
+  // teks info COD
+  codNoteText: { flex: 1, fontSize: 11, color: c.textMuted, lineHeight: 16 },
   // baris catatan keamanan: menyamping, rata tengah, jarak isi 5, jarak atas 12
   secureRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 12 },
   // teks catatan keamanan: ukuran 11, warna abu

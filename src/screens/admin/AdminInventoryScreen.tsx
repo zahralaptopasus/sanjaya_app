@@ -570,7 +570,7 @@ export default function AdminInventoryScreen() {
       >
         <KeyboardAvoidingView
           style={styles.modalOverlay}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
           {/* overlay gelap - tap untuk tutup */}
           <TouchableOpacity
@@ -590,168 +590,176 @@ export default function AdminInventoryScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Preview gambar produk */}
-            {imageUri ? (
-              <View style={styles.modalImagePreview}>
-                <Image
-                  source={{ uri: imageUri }}
-                  style={styles.modalPreviewImage}
-                />
-                {imageUri.startsWith("http") && (
-                  <View style={styles.modalExistingPhotoBadge}>
-                    <Text style={styles.modalExistingPhotoText}>
-                      Foto saat ini
-                    </Text>
-                  </View>
-                )}
-                <TouchableOpacity
-                  style={styles.modalRemoveImageBtn}
-                  onPress={clearImage}
-                >
-                  <Ionicons name="close" size={18} color="#fff" />
-                </TouchableOpacity>
-              </View>
-            ) : null}
-
-            {/* Tombol pilih gambar (kamera/galeri) */}
-            <View style={styles.modalImagePickerRow}>
-              <TouchableOpacity
-                style={styles.modalImagePickerBtn}
-                onPress={() => pickImage("gallery")}
-              >
-                <Ionicons name="image" size={18} color={navy} />
-                <Text style={styles.modalImagePickerText}>
-                  Pilih dari Galeri
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalImagePickerBtn}
-                onPress={() => pickImage("camera")}
-              >
-                <Ionicons name="camera" size={18} color={navy} />
-                <Text style={styles.modalImagePickerText}>Ambil Foto</Text>
-              </TouchableOpacity>
-            </View>
-
-            {imageUri && (
-              <Text style={styles.modalImageHint}>
-                Gambar akan diupload saat simpan. Tap (x) untuk hapus.
-              </Text>
-            )}
-
-            {/* input kode barang */}
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Kode barang, mis. SP-OLI-07"
-              placeholderTextColor={muted}
-              value={code}
-              onChangeText={setCode}
-              autoCapitalize="characters"
-              editable={modalMode === "add"}
-            />
-            {/* input nama sparepart */}
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Nama sparepart"
-              placeholderTextColor={muted}
-              value={name}
-              onChangeText={setName}
-            />
-            {/* input jenis/pilihan barang (opsional) */}
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Jenis / pilihan barang (opsional)"
-              placeholderTextColor={muted}
-              value={type}
-              onChangeText={setType}
-            />
-            {/* kategori - chip row horizontal */}
+            {/* area form yang bisa digulir (agar field bawah tetap terjangkau) */}
             <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.modalChipRow}
-              contentContainerStyle={{ gap: 8 }}
+              style={{ flex: 1 }}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator
             >
-              {activeCategories.map((c) => (
-                <TouchableOpacity
-                  key={c.id}
-                  style={[
-                    styles.modalChip,
-                    selectedCategoryId === c.id && styles.modalChipActive,
-                  ]}
-                  onPress={() => setSelectedCategoryId(c.id)}
-                >
-                  <Text
-                    style={[
-                      styles.modalChipText,
-                      selectedCategoryId === c.id && styles.modalChipTextActive,
-                    ]}
+              {/* Preview gambar produk */}
+              {imageUri ? (
+                <View style={styles.modalImagePreview}>
+                  <Image
+                    source={{ uri: imageUri }}
+                    style={styles.modalPreviewImage}
+                  />
+                  {imageUri.startsWith("http") && (
+                    <View style={styles.modalExistingPhotoBadge}>
+                      <Text style={styles.modalExistingPhotoText}>
+                        Foto saat ini
+                      </Text>
+                    </View>
+                  )}
+                  <TouchableOpacity
+                    style={styles.modalRemoveImageBtn}
+                    onPress={clearImage}
                   >
-                    {c.label}
+                    <Ionicons name="close" size={18} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              {/* Tombol pilih gambar (kamera/galeri) */}
+              <View style={styles.modalImagePickerRow}>
+                <TouchableOpacity
+                  style={styles.modalImagePickerBtn}
+                  onPress={() => pickImage("gallery")}
+                >
+                  <Ionicons name="image" size={18} color={navy} />
+                  <Text style={styles.modalImagePickerText}>
+                    Pilih dari Galeri
                   </Text>
                 </TouchableOpacity>
-              ))}
+                <TouchableOpacity
+                  style={styles.modalImagePickerBtn}
+                  onPress={() => pickImage("camera")}
+                >
+                  <Ionicons name="camera" size={18} color={navy} />
+                  <Text style={styles.modalImagePickerText}>Ambil Foto</Text>
+                </TouchableOpacity>
+              </View>
+
+              {imageUri && (
+                <Text style={styles.modalImageHint}>
+                  Gambar akan diupload saat simpan. Tap (x) untuk hapus.
+                </Text>
+              )}
+
+              {/* input kode barang */}
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Kode barang, mis. SP-OLI-07"
+                placeholderTextColor={muted}
+                value={code}
+                onChangeText={setCode}
+                autoCapitalize="characters"
+                editable={modalMode === "add"}
+              />
+              {/* input nama sparepart */}
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Nama sparepart"
+                placeholderTextColor={muted}
+                value={name}
+                onChangeText={setName}
+              />
+              {/* input jenis/pilihan barang (opsional) */}
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Jenis / pilihan barang (opsional)"
+                placeholderTextColor={muted}
+                value={type}
+                onChangeText={setType}
+              />
+              {/* kategori - chip row horizontal */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.modalChipRow}
+                contentContainerStyle={{ gap: 8 }}
+              >
+                {activeCategories.map((c) => (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={[
+                      styles.modalChip,
+                      selectedCategoryId === c.id && styles.modalChipActive,
+                    ]}
+                    onPress={() => setSelectedCategoryId(c.id)}
+                  >
+                    <Text
+                      style={[
+                        styles.modalChipText,
+                        selectedCategoryId === c.id && styles.modalChipTextActive,
+                      ]}
+                    >
+                      {c.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              {/* baris satuan & harga beli */}
+              <View style={styles.modalDuo}>
+                <TextInput
+                  style={[styles.modalInput, { flex: 1 }]}
+                  placeholder="Satuan (pcs, box, liter, dll)"
+                  placeholderTextColor={muted}
+                  value={unit}
+                  onChangeText={setUnit}
+                  autoCapitalize="none"
+                />
+                <View style={{ width: 10 }} />
+                <TextInput
+                  style={[styles.modalInput, { flex: 1 }]}
+                  placeholder="Harga Beli (Rp)"
+                  placeholderTextColor={muted}
+                  keyboardType="number-pad"
+                  value={purchasePrice}
+                  onChangeText={setPurchasePrice}
+                />
+              </View>
+              {/* baris lokasi & stok awal */}
+              <View style={styles.modalDuo}>
+                <TextInput
+                  style={[styles.modalInput, { flex: 1 }]}
+                  placeholder="Lokasi simpan"
+                  placeholderTextColor={muted}
+                  value={location}
+                  onChangeText={setLocation}
+                  autoCapitalize="words"
+                />
+                <View style={{ width: 10 }} />
+                <TextInput
+                  style={[styles.modalInput, { flex: 1 }]}
+                  placeholder="Stok Awal (ref)"
+                  placeholderTextColor={muted}
+                  keyboardType="number-pad"
+                  value={initialStock}
+                  onChangeText={setInitialStock}
+                />
+              </View>
+              {/* baris harga dan stok */}
+              <View style={styles.modalDuo}>
+                <TextInput
+                  style={[styles.modalInput, { flex: 1 }]}
+                  placeholder="Harga Jual (Rp)"
+                  placeholderTextColor={muted}
+                  keyboardType="number-pad"
+                  value={price}
+                  onChangeText={setPrice}
+                />
+                <View style={{ width: 10 }} />
+                <TextInput
+                  style={[styles.modalInput, { flex: 1 }]}
+                  placeholder="Stok Saat Ini"
+                  placeholderTextColor={muted}
+                  keyboardType="number-pad"
+                  value={stock}
+                  onChangeText={setStock}
+                />
+              </View>
             </ScrollView>
-            {/* baris satuan & harga beli */}
-            <View style={styles.modalDuo}>
-              <TextInput
-                style={[styles.modalInput, { flex: 1 }]}
-                placeholder="Satuan (pcs, box, liter, dll)"
-                placeholderTextColor={muted}
-                value={unit}
-                onChangeText={setUnit}
-                autoCapitalize="none"
-              />
-              <View style={{ width: 10 }} />
-              <TextInput
-                style={[styles.modalInput, { flex: 1 }]}
-                placeholder="Harga Beli (Rp)"
-                placeholderTextColor={muted}
-                keyboardType="number-pad"
-                value={purchasePrice}
-                onChangeText={setPurchasePrice}
-              />
-            </View>
-            {/* baris lokasi & stok awal */}
-            <View style={styles.modalDuo}>
-              <TextInput
-                style={[styles.modalInput, { flex: 1 }]}
-                placeholder="Lokasi simpan"
-                placeholderTextColor={muted}
-                value={location}
-                onChangeText={setLocation}
-                autoCapitalize="words"
-              />
-              <View style={{ width: 10 }} />
-              <TextInput
-                style={[styles.modalInput, { flex: 1 }]}
-                placeholder="Stok Awal (ref)"
-                placeholderTextColor={muted}
-                keyboardType="number-pad"
-                value={initialStock}
-                onChangeText={setInitialStock}
-              />
-            </View>
-            {/* baris harga dan stok */}
-            <View style={styles.modalDuo}>
-              <TextInput
-                style={[styles.modalInput, { flex: 1 }]}
-                placeholder="Harga Jual (Rp)"
-                placeholderTextColor={muted}
-                keyboardType="number-pad"
-                value={price}
-                onChangeText={setPrice}
-              />
-              <View style={{ width: 10 }} />
-              <TextInput
-                style={[styles.modalInput, { flex: 1 }]}
-                placeholder="Stok Saat Ini"
-                placeholderTextColor={muted}
-                keyboardType="number-pad"
-                value={stock}
-                onChangeText={setStock}
-              />
-            </View>
 
             {/* actions: Batal + Simpan */}
             <View style={styles.modalActions}>
@@ -960,6 +968,10 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 16,
+  },
+  // area form yang bisa digulir di dalam sheet
+  modalScrollContent: {
+    paddingBottom: 8,
   },
   // header modal: row, space-between, center, margin bawah 16
   modalHeader: {

@@ -189,6 +189,10 @@ export default function OrdersScreen({ navigation }: any) {
       subtotal: item.total,
       discount: 0,
       coupon: null,
+      // metode pembayaran agar struk langsung tahu COD / Midtrans
+      paymentMethod: item.paymentMethod ?? 'midtrans',
+      // status awal agar tampilan struk tidak berkedip status lain
+      initialStatus: item.status,
     });
   };
 
@@ -310,7 +314,13 @@ export default function OrdersScreen({ navigation }: any) {
               <View style={styles.cardBody}>
                 {/* baris atas: kode pesanan + pill status */}
                 <View style={styles.cardTop}>
-                  <Text style={styles.code}>#{item.code}</Text>
+                  {/* kode pesanan + penanda COD bila memakai tunai di tempat */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}>
+                    <Text style={styles.code} numberOfLines={1}>#{item.code}</Text>
+                    {item.paymentMethod === 'cod' ? (
+                      <View style={styles.codBadge}><Text style={styles.codBadgeText}>COD</Text></View>
+                    ) : null}
+                  </View>
                   {/* pill status dengan titik warna */}
                   <View style={[styles.pill, { backgroundColor: st.bg }]}>
                     <View style={[styles.pillDot, { backgroundColor: st.color }]} />
@@ -329,7 +339,12 @@ export default function OrdersScreen({ navigation }: any) {
                   </View>
                   <View style={styles.actions}>
                     {/* aksi cepat menyesuaikan status */}
-                    {isPending ? (
+                    {isPending && item.paymentMethod === 'cod' ? (
+                      // COD menunggu: buka struk untuk melihat instruksi bayar di tempat
+                      <TouchableOpacity style={styles.btnReorder} onPress={() => openReceipt(item)}>
+                        <Text style={styles.btnReorderText}>Detail</Text>
+                      </TouchableOpacity>
+                    ) : isPending ? (
                       // pesanan menunggu: buka struk yang punya tombol pembayaran
                       <TouchableOpacity style={styles.btnPay} onPress={() => openReceipt(item)}>
                         <Text style={styles.btnPayText}>Bayar</Text>
@@ -419,6 +434,10 @@ const makeStyles = (c: Palette) => StyleSheet.create({
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   // kode pesanan
   code: { fontSize: 14, fontFamily: F.extrabold, color: c.text },
+  // penanda metode pembayaran COD
+  codBadge: { backgroundColor: c.chip, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  // teks penanda COD
+  codBadgeText: { fontSize: 9, fontFamily: F.extrabold, color: c.warn, letterSpacing: 0.5 },
   // pill status
   pill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
   // titik warna pada pill

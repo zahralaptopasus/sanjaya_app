@@ -39,6 +39,8 @@ export async function createOrder(params: {
   discount: number;
   // total akhir pesanan
   total: number;
+  // metode pembayaran: Midtrans (online) atau COD/tunai di tempat
+  paymentMethod?: 'midtrans' | 'cod';
 }): Promise<string | null> {
   try {
     // mengambil user yang sedang login
@@ -54,15 +56,37 @@ export async function createOrder(params: {
       price: i.price,
     }));
 
+    // metode pembayaran yang dipilih (default Midtrans)
+    const method = params.paymentMethod ?? 'midtrans';
+
     // memanggil RPC 'create_order_with_items' dengan parameter:
     // - p_code: kode pesanan
     // - p_items: array item pesanan
     // - p_discount: besar diskon (agar total yang disimpan sesuai total bayar setelah kupon)
-    const { data, error } = await supabase.rpc('create_order_with_items', {
+    // - p_payment_method: 'midtrans' atau 'cod' (butuh migration 20261107_cod_payment.sql)
+    let { data, error } = await supabase.rpc('create_order_with_items', {
       p_code: params.code,
       p_items: items,
       p_discount: params.discount,
+      p_payment_method: method,
     });
+
+    // fallback kompatibilitas: bila database belum menjalankan migration COD,
+    // alur Midtrans tetap bisa jalan memakai RPC lama (tanpa p_payment_method).
+    if (error && /PGRST202|could not find the function|schema cache/i.test(error.message ?? '')) {
+      if (method === 'cod') {
+        console.error('create_order: migration COD belum dijalankan', error);
+        return 'MIGRATION_REQUIRED';
+      }
+      const fallback = await supabase.rpc('create_order_with_items', {
+        p_code: params.code,
+        p_items: items,
+        p_discount: params.discount,
+      });
+      data = fallback.data;
+      error = fallback.error;
+    }
+
     if (error) {
       // deteksi error khusus: stok kurang
       if (/stok_kurang/i.test(error.message ?? '')) return 'STOK_KURANG';
@@ -117,6 +141,23 @@ export async function getOrderStatus(orderId: string): Promise<string | null> {
     return String(data.status);
   } catch {
     return null;
+  }
+}
+
+// fungsi untuk mengambil metode pembayaran sebuah pesanan
+// dipakai layar Struk agar tahu apakah pesanan memakai Midtrans atau Tunai (COD)
+export async function getOrderPaymentMethod(orderId: string): Promise<'midtrans' | 'cod'> {
+  try {
+    // ambil kolom payment_method sesuai id order (RLS: user hanya bisa baca order miliknya)
+    const { data, error } = await supabase
+      .from('orders')
+      .select('payment_method')
+      .eq('id', orderId)
+      .maybeSingle();
+    if (error || !data) return 'midtrans';
+    return String(data.payment_method ?? 'midtrans') === 'cod' ? 'cod' : 'midtrans';
+  } catch {
+    return 'midtrans';
   }
 }
 
@@ -204,11 +245,11 @@ export async function addReview(
 export async function getMyOrders(): Promise<Order[]> {
   // query orders dengan nested select order_items(product_id, name, qty, price)
   // .from('orders') = tabel orders
-  // .select('id, code, status, total, created_at, order_items(product_id, name, qty, price)') = nested select relasi
+  // .select('id, code, status, total, created_at, payment_method, order_items(...)') = nested select relasi
   // .order('created_at', { ascending: false }) = urutkan terbaru dulu
   const { data, error } = await supabase
     .from('orders')
-    .select('id, code, status, total, created_at, order_items(product_id, name, qty, price)')
+    .select('id, code, status, total, created_at, payment_method, order_items(product_id, name, qty, price)')
     .order('created_at', { ascending: false });
   if (error || !data) return [];
   // mapping hasil query ke tipe Order
@@ -217,6 +258,8 @@ export async function getMyOrders(): Promise<Order[]> {
     id: String(o.id),
     code: String(o.code),
     status: String(o.status),
+    // metode pembayaran tersimpan di database ('midtrans' / 'cod')
+    paymentMethod: String(o.payment_method ?? 'midtrans'),
     total: Number(o.total),
     // created_at dari DB dipetakan ke createdAt
     createdAt: String(o.created_at),

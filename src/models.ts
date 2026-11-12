@@ -45,6 +45,8 @@ export type Order = {
   code: string;
   // status pesanan (misal: pending, paid, shipped, completed, cancelled)
   status: string;
+  // metode pembayaran: 'midtrans' (online) atau 'cod' (tunai di tempat)
+  paymentMethod?: string;
   // total akhir pesanan dalam Rupiah
   total: number;
   // waktu pembuatan pesanan (ISO string / format tanggal dari DB)

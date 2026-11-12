@@ -53,9 +53,16 @@ export function usernameError(value: string): string | null {
   return null;
 }
 
+// alias login admin: username "admin123" diarahkan ke akun admin
+export const ADMIN_LOGIN_ALIAS = 'admin123';
+// email akun admin yang dipakai saat login dengan alias di atas
+export const ADMIN_EMAIL = 'admintest@gmail.com';
+
 // mengubah "email atau username" menjadi email yang dipakai Supabase Auth
 export async function resolveLoginEmail(identifier: string): Promise<string> {
   const id = identifier.trim();
+  // alias admin selalu memakai akun admin (tidak bergantung pada RPC username)
+  if (normalizeUsername(id) === ADMIN_LOGIN_ALIAS) return ADMIN_EMAIL;
   // kalau sudah berupa email, langsung pakai
   if (id.includes('@')) return id;
   // selain itu cari lewat RPC (security definer, aman dari RLS)
