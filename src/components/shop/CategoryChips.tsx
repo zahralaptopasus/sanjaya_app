@@ -41,9 +41,9 @@ export default function CategoryChips({ categories, selected, onSelect }: Catego
           <Text style={[styles.chipText, selected === 'Semua' && styles.chipTextActive]}>Semua</Text>
         </TouchableOpacity>
         {categories.map((ct) => {
-          const active = selected === ct.id;
+          const active = selected === ct.label;
           return (
-            <TouchableOpacity key={ct.id} onPress={() => onSelect(ct.id)} style={[styles.chip, active && styles.chipActive]}>
+            <TouchableOpacity key={ct.id} onPress={() => onSelect(ct.label)} style={[styles.chip, active && styles.chipActive]}>
               <Ionicons name={ct.icon as any} size={13} color={active ? '#fff' : c.warn} />
               <Text style={[styles.chipText, active && styles.chipTextActive]}>{ct.label}</Text>
             </TouchableOpacity>

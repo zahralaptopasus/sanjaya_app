@@ -712,7 +712,7 @@ export function toCSV<T extends Record<string, any>>(headers: string[], rows: T[
 export async function exportCSV(filename: string, headers: string[], rows: any[]): Promise<{ error?: string }> {
   try {
     const csv = '\uFEFF' + toCSV(headers, rows);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     
     // web: create download link
     if (typeof window !== 'undefined' && window.document) {

@@ -167,8 +167,9 @@ export default function AdminInventoryScreen() {
       setType("");
       setName(product.name);
     }
-    // set category ID dari produk
-    setSelectedCategoryId(product.category);
+    // set category ID dari produk (product.category sekarang simpan label, cari ID-nya)
+    const matchedCat = activeCategories.find((c) => c.label === product.category);
+    setSelectedCategoryId(matchedCat?.id ?? activeCategories[0]?.id ?? "");
     setPrice(String(product.price));
     setPurchasePrice(String(product.purchasePrice ?? 0));
     setStock(String(product.stock));
@@ -302,10 +303,14 @@ export default function AdminInventoryScreen() {
         finalImageUrl = null;
       }
 
+      // Get category label from activeCategories (user-facing filter uses label)
+      const selectedCategory = activeCategories.find((c) => c.id === selectedCategoryId);
+      const categoryLabel = selectedCategory?.label ?? selectedCategoryId;
+
       const productData = {
         code: code.trim().toUpperCase(),
         name: type.trim() ? `${type.trim()} - ${name.trim()}` : name.trim(),
-        category: selectedCategoryId,
+        category: categoryLabel,
         unit: unit.trim(),
         price: Math.trunc(p),
         purchasePrice: Math.trunc(pp),
@@ -461,10 +466,10 @@ export default function AdminInventoryScreen() {
             {activeCategories.map((c) => (
               <TouchableOpacity
                 key={c.id}
-                style={[styles.filterChip, catFilter === c.id && styles.filterChipActive]}
-                onPress={() => setCatFilter(c.id)}
+                style={[styles.filterChip, catFilter === c.label && styles.filterChipActive]}
+                onPress={() => setCatFilter(c.label)}
               >
-                <Text style={[styles.filterChipText, catFilter === c.id && styles.filterChipTextActive]}>
+                <Text style={[styles.filterChipText, catFilter === c.label && styles.filterChipTextActive]}>
                   {c.label}
                 </Text>
               </TouchableOpacity>
