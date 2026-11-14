@@ -6,7 +6,7 @@ create table public.orders (
   id uuid primary key default gen_random_uuid(),
   code text not null,                         -- no invoice/PO
   customer text not null,                     -- nama pelanggan/username
-  total number not null default 0,            -- total harga
+  total numeric(10,2) not null default 0,   -- total harga
   status text not null default 'pending',     -- pending, paid, shipped, completed, cancelled
   payment_method text,                        -- midtrans, cod, transfer, dll
   payment_status text default 'unpaid',       -- unpaid, paid, refunded

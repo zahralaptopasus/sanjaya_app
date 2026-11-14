@@ -7,7 +7,7 @@ create table public.invoices (
   order_id uuid references public.orders(id) on delete set null,
   code text not null,                         -- no faktur
   customer text not null,                     -- nama pelanggan
-  amount number not null default 0,           -- jumlah tagihan
+  amount numeric(10,2) not null default 0,  -- jumlah tagihan
   status text not null default 'unpaid',      -- unpaid, paid, overdue
   payment_method text,                        -- midtrans, cod, transfer, dll
   paid_at timestamptz,                        -- waktu pembayaran
