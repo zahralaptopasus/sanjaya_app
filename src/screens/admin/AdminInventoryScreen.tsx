@@ -686,7 +686,6 @@ export default function AdminInventoryScreen() {
                 value={code}
                 onChangeText={setCode}
                 autoCapitalize="characters"
-                editable={modalMode === "add"}
               />
               {/* input nama sparepart */}
               <TextInput
