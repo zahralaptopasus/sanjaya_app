@@ -1,9 +1,9 @@
 // ===== LAPORAN REKAPITULASI PENJUALAN =====
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, Button, Alert } from "react-native";
-import * as ExcelJS from "exceljs";
-import * as FileSaver from "file-saver";
 import { supabase } from "../../lib/supabase";
+import { exportExcel } from "../../lib/exportSheet";
+import { navy, ink, muted, bronze } from "../../theme";
 
 interface SalesItem {
   id: string;
@@ -19,63 +19,56 @@ export default function ReportsSalesScreen() {
   const [sales, setSales] = useState<SalesItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadSales = async () => {
+  const loadSales = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from("orders")
         .select("id, code, total, status, payment_method, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      const transformed = (data || []).map((o: any) => ({
+      const transformed: SalesItem[] = (data || []).map((o: any) => ({
         id: o.id,
         date: o.created_at,
         invoice: o.code,
         customer: o.customer,
         subtotal: o.total ?? 0,
         payment_method: o.payment_method ?? "-",
-        status: o.status === "completed" || o.status === "paid" ? "lunas" : "belum lunas",
+        status: (o.status === "completed" || o.status === "paid" ? "lunas" : "belum lunas") as SalesItem["status"],
       }));
       setSales(transformed);
       setLoading(false);
     } catch (e) {
       setLoading(false);
-      Alert.alert("Error", "Gagal load data orders: " + (e?.message ?? ""));
+      Alert.alert("Error", "Gagal load data orders: " + ((e as Error)?.message ?? ""));
     }
-  };
-
-  useEffect(() => {
-    loadSales();
   }, []);
 
-  const exportToExcel = async () => {
-    const workbook = new ExcelJS.Workbook();
-    const ws = workbook.addWorksheet("Sales Report");
+  useEffect(() => {
+    void (async () => {
+      await loadSales();
+    })();
+  }, [loadSales]);
 
-    ws.columns = [
-      { header: "Tanggal", key: "date", width: 20 },
-      { header: "Invoice", key: "invoice", width: 25 },
-      { header: "Customer", key: "customer", width: 25 },
-      { header: "Subtotal", key: "subtotal", width: 20 },
-      { header: "Metode Pembayaran", key: "payment_method", width: 25 },
-      { header: "Status", key: "status", width: 18 },
+  const exportToExcel = () => {
+    const columns = [
+      { header: "Tanggal", key: "date" },
+      { header: "Invoice", key: "invoice" },
+      { header: "Customer", key: "customer" },
+      { header: "Subtotal", key: "subtotal" },
+      { header: "Metode Pembayaran", key: "payment_method" },
+      { header: "Status", key: "status" },
     ];
 
-    sales.forEach((s) => {
-      ws.addRow({
-        date: s.date,
-        invoice: s.invoice,
-        customer: s.customer,
-        subtotal: s.subtotal,
-        payment_method: s.payment_method,
-        status: s.status,
-      });
-    });
+    const rows = sales.map((s) => ({
+      date: s.date,
+      invoice: s.invoice,
+      customer: s.customer,
+      subtotal: s.subtotal,
+      payment_method: s.payment_method,
+      status: s.status,
+    }));
 
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-    FileSaver.saveAs(blob, "Laporan-Penjualan.xlsx");
+    exportExcel("Laporan-Penjualan", "Laporan Rekapitulasi Penjualan", columns, rows);
   };
 
   const exportToPDF = async () => {
@@ -87,7 +80,7 @@ export default function ReportsSalesScreen() {
   };
 
   if (loading)
-    return <ActivityIndicator size="large" color="navy" style={{ flex: 1, justifyContent: "center" }} />;
+    return <ActivityIndicator size="large" color={navy} style={{ flex: 1, justifyContent: "center" }} />;
 
   return (
     <>
@@ -99,13 +92,13 @@ export default function ReportsSalesScreen() {
       </View>
 
       <View style={styles.buttons}>
-        <Button title="Unduh Excel" onPress={exportToExcel} color="primary" />
-        <Button title="Unduh PDF" onPress={exportToPDF} color="secondary" />
+        <Button title="Unduh Excel" onPress={exportToExcel} color={navy} />
+        <Button title="Unduh PDF" onPress={exportToPDF} color={bronze} />
       </View>
 
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
         {loading ? (
-          <ActivityIndicator size="large" color="navy" style={{ flex: 1, justifyContent: "center" }} />
+          <ActivityIndicator size="large" color={navy} style={{ flex: 1, justifyContent: "center" }} />
         ) : (
           sales.map((s) => (
             <View key={s.id} style={styles.row}>
@@ -132,8 +125,8 @@ const styles = StyleSheet.create({
     borderBottomColor: "#E5DFD1",
     backgroundColor: "#fff",
   },
-  title: { fontSize: 20, fontFamily: "Poppins_700Bold", color: "ink" },
-  sub: { fontSize: 12, color: "muted", marginBottom: 12 },
+  title: { fontSize: 20, fontFamily: "Poppins_700Bold", color: ink },
+  sub: { fontSize: 12, color: muted, marginBottom: 12 },
   buttons: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -151,10 +144,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#E5DFD1",
   },
-  date: { fontSize: 12, color: "muted" },
+  date: { fontSize: 12, color: muted },
   invoice: { fontFamily: "Poppins_600SemiBold", width: 100 },
   customer: { flex: 1 },
-  subtotal: { fontSize: 12, color: "muted" },
-  payment: { fontSize: 11, color: "muted" },
+  subtotal: { fontSize: 12, color: muted },
+  payment: { fontSize: 11, color: muted },
   status: { fontSize: 11, paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 },
 });

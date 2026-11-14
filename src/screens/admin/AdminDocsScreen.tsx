@@ -15,6 +15,7 @@ import {
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 import { supabase } from "../../lib/supabase";
 import { navy, surface, cardBg, chipBg, muted, ink, bronze, amber } from "../../theme";
 
@@ -26,8 +27,20 @@ type Doc = {
   created_at: string;
 };
 
+// ===== DAFTAR LAPORAN =====
+// Setiap laporan terdaftar sebagai screen di App.tsx (AdminStack)
+const REPORT_LINKS = [
+  { label: "Inventory", route: "ReportsInventory", icon: "cube-outline" },
+  { label: "Purchase Order", route: "ReportsPO", icon: "cart-outline" },
+  { label: "Mutasi Stok", route: "ReportsStockMovement", icon: "swap-horizontal-outline" },
+  { label: "Penjualan", route: "ReportsSales", icon: "cash-outline" },
+  { label: "Faktur", route: "ReportsInvoices", icon: "receipt-outline" },
+  { label: "Pengiriman", route: "ReportsShipping", icon: "car-outline" },
+] as const;
+
 // ===== KOMPONEN UTAMA =====
 export default function AdminDocsScreen() {
+  const navigation = useNavigation<any>();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -207,6 +220,24 @@ export default function AdminDocsScreen() {
               <Ionicons name="close-circle" size={16} color={muted} />
             </TouchableOpacity>
           )}
+        </View>
+
+        {/* Navigasi ke Laporan */}
+        <View style={styles.navSection}>
+          <Text style={styles.sectionTitle}>Laporan</Text>
+          <View style={styles.navGrid}>
+            {REPORT_LINKS.map((item) => (
+              <TouchableOpacity
+                key={item.route}
+                style={styles.navItem}
+                onPress={() => navigation.navigate(item.route)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name={item.icon} size={18} color={bronze} />
+                <Text style={styles.navItemText}>{item.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
         {/* Judul daftar */}
@@ -498,4 +529,43 @@ const styles = StyleSheet.create({
   },
   modalSaveDisabled: { opacity: 0.5 },
   modalSaveText: { fontSize: 13, fontFamily: "Inter_800ExtraBold", color: "#261A00" },
+
+  // Navigasi Laporan
+  navSection: {
+    padding: 16,
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: "#E5DFD1",
+    marginTop: 12,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontFamily: "Poppins_600SemiBold",
+    color: ink,
+    marginBottom: 10,
+  },
+  navGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  navItem: {
+    width: "31%",
+    minWidth: 96,
+    flexGrow: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E5DFD1",
+    backgroundColor: chipBg,
+  },
+  navItemText: {
+    color: ink,
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    textAlign: "center",
+  },
 });

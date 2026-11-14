@@ -1,9 +1,9 @@
 // ===== LAPORAN PENGIRIMAN & EKSPEDISI =====
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, Button, Alert } from "react-native";
-import * as ExcelJS from "exceljs";
-import * as FileSaver from "file-saver";
 import { supabase } from "../../lib/supabase";
+import { exportExcel } from "../../lib/exportSheet";
+import { navy, ink, muted, bronze } from "../../theme";
 
 interface ShippingItem {
   id: string;
@@ -19,7 +19,7 @@ export default function ReportsShippingScreen() {
   const [shipments, setShipments] = useState<ShippingItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadShipments = async () => {
+  const loadShipments = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from("shipments")
@@ -39,43 +39,36 @@ export default function ReportsShippingScreen() {
       setLoading(false);
     } catch (e) {
       setLoading(false);
-      Alert.alert("Error", "Gagal load data shipments: " + (e?.message ?? ""));
+      Alert.alert("Error", "Gagal load data shipments: " + ((e as Error)?.message ?? ""));
     }
-  };
-
-  useEffect(() => {
-    loadShipments();
   }, []);
 
-  const exportToExcel = async () => {
-    const workbook = new ExcelJS.Workbook();
-    const ws = workbook.addWorksheet("Shipping Report");
+  useEffect(() => {
+    void (async () => {
+      await loadShipments();
+    })();
+  }, [loadShipments]);
 
-    ws.columns = [
-      { header: "Tanggal", key: "date", width: 20 },
-      { header: "Customer", key: "customer", width: 30 },
-      { header: "Alamat", key: "address", width: 40 },
-      { header: "Kurir", key: "courier", width: 20 },
-      { header: "No. Resi", key: "tracking_number", width: 25 },
-      { header: "Status", key: "status", width: 18 },
+  const exportToExcel = () => {
+    const columns = [
+      { header: "Tanggal", key: "date" },
+      { header: "Customer", key: "customer" },
+      { header: "Alamat", key: "address" },
+      { header: "Kurir", key: "courier" },
+      { header: "No. Resi", key: "tracking_number" },
+      { header: "Status", key: "status" },
     ];
 
-    shipments.forEach((s) => {
-      ws.addRow({
-        date: s.date,
-        customer: s.customer,
-        address: s.address,
-        courier: s.courier,
-        tracking_number: s.tracking_number,
-        status: s.status,
-      });
-    });
+    const rows = shipments.map((s) => ({
+      date: s.date,
+      customer: s.customer,
+      address: s.address,
+      courier: s.courier,
+      tracking_number: s.tracking_number,
+      status: s.status,
+    }));
 
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-    FileSaver.saveAs(blob, "Laporan-Pengiriman-dan-Ekspedisi.xlsx");
+    exportExcel("Laporan-Pengiriman-dan-Ekspedisi", "Laporan Pengiriman & Ekspedisi", columns, rows);
   };
 
   const exportToPDF = async () => {
@@ -87,7 +80,7 @@ export default function ReportsShippingScreen() {
   };
 
   if (loading)
-    return <ActivityIndicator size="large" color="navy" style={{ flex: 1, justifyContent: "center" }} />;
+    return <ActivityIndicator size="large" color={navy} style={{ flex: 1, justifyContent: "center" }} />;
 
   return (
     <>
@@ -99,13 +92,13 @@ export default function ReportsShippingScreen() {
       </View>
 
       <View style={styles.buttons}>
-        <Button title="Unduh Excel" onPress={exportToExcel} color="primary" />
-        <Button title="Unduh PDF" onPress={exportToPDF} color="secondary" />
+        <Button title="Unduh Excel" onPress={exportToExcel} color={navy} />
+        <Button title="Unduh PDF" onPress={exportToPDF} color={bronze} />
       </View>
 
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
         {loading ? (
-          <ActivityIndicator size="large" color="navy" style={{ flex: 1, justifyContent: "center" }} />
+          <ActivityIndicator size="large" color={navy} style={{ flex: 1, justifyContent: "center" }} />
         ) : (
           shipments.map((s) => (
             <View key={s.id} style={styles.row}>
@@ -130,8 +123,8 @@ const styles = StyleSheet.create({
     borderBottomColor: "#E5DFD1",
     backgroundColor: "#fff",
   },
-  title: { fontSize: 20, fontFamily: "Poppins_700Bold", color: "ink" },
-  sub: { fontSize: 12, color: "muted", marginBottom: 12 },
+  title: { fontSize: 20, fontFamily: "Poppins_700Bold", color: ink },
+  sub: { fontSize: 12, color: muted, marginBottom: 12 },
   buttons: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -149,9 +142,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#E5DFD1",
   },
-  date: { fontSize: 12, color: "muted" },
+  date: { fontSize: 12, color: muted },
   customer: { flex: 1 },
-  address: { fontSize: 11, color: "muted", flex: 1 },
+  address: { fontSize: 11, color: muted, flex: 1 },
   courier: { width: 80 },
   tracking: { width: 120 },
   status: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },

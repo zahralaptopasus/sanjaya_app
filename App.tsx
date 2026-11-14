@@ -116,6 +116,14 @@ import AdminCarouselScreen from './src/screens/admin/AdminCarouselScreen';
 // LAYAR BARU: Kelola Supplier
 import AdminSuppliersScreen from './src/screens/admin/AdminSuppliersScreen';
 
+// LAYAR LAPORAN (diakses dari halaman Dokumen)
+import ReportsInventoryScreen from './src/app/admin/ReportsInventoryScreen';
+import ReportsPOScreen from './src/app/admin/ReportsPOScreen';
+import ReportsStockMovementScreen from './src/app/admin/ReportsStockMovementScreen';
+import ReportsSalesScreen from './src/app/admin/ReportsSalesScreen';
+import ReportsInvoicesScreen from './src/app/admin/ReportsInvoicesScreen';
+import ReportsShippingScreen from './src/app/admin/ReportsShippingScreen';
+
 // Palet warna (diperlukan untuk fallback loading screen)
 import { navy, lightPalette, darkPalette } from './src/theme';
 // Komponen header reusable
@@ -473,6 +481,38 @@ function AdminStack({ onSignOut }: { onSignOut: () => void }) {
         name="AdminSuppliers"
         component={AdminSuppliersScreen}
         options={{ title: 'Kelola Supplier' }}
+      />
+
+      {/* Laporan (dibuka dari halaman Dokumen) */}
+      <RootStack.Screen
+        name="ReportsInventory"
+        component={ReportsInventoryScreen}
+        options={{ title: 'Laporan Inventory' }}
+      />
+      <RootStack.Screen
+        name="ReportsPO"
+        component={ReportsPOScreen}
+        options={{ title: 'Laporan Purchase Order' }}
+      />
+      <RootStack.Screen
+        name="ReportsStockMovement"
+        component={ReportsStockMovementScreen}
+        options={{ title: 'Mutasi Stok' }}
+      />
+      <RootStack.Screen
+        name="ReportsSales"
+        component={ReportsSalesScreen}
+        options={{ title: 'Laporan Penjualan' }}
+      />
+      <RootStack.Screen
+        name="ReportsInvoices"
+        component={ReportsInvoicesScreen}
+        options={{ title: 'Laporan Faktur' }}
+      />
+      <RootStack.Screen
+        name="ReportsShipping"
+        component={ReportsShippingScreen}
+        options={{ title: 'Laporan Pengiriman' }}
       />
     </RootStack.Navigator>
   );

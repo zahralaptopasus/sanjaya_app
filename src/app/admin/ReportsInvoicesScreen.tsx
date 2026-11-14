@@ -1,9 +1,9 @@
 // ===== REKAPITULASI FAKTUR & PESANAN =====
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, Button, Alert } from "react-native";
-import * as ExcelJS from "exceljs";
-import * as FileSaver from "file-saver";
 import { supabase } from "../../lib/supabase";
+import { exportExcel } from "../../lib/exportSheet";
+import { navy, ink, muted, bronze } from "../../theme";
 
 interface InvoiceItem {
   id: string;
@@ -19,7 +19,7 @@ export default function ReportsInvoicesScreen() {
   const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadInvoices = async () => {
+  const loadInvoices = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from("invoices")
@@ -39,43 +39,36 @@ export default function ReportsInvoicesScreen() {
       setLoading(false);
     } catch (e) {
       setLoading(false);
-      Alert.alert("Error", "Gagal load data invoices: " + (e?.message ?? ""));
+      Alert.alert("Error", "Gagal load data invoices: " + ((e as Error)?.message ?? ""));
     }
-  };
-
-  useEffect(() => {
-    loadInvoices();
   }, []);
 
-  const exportToExcel = async () => {
-    const workbook = new ExcelJS.Workbook();
-    const ws = workbook.addWorksheet("Invoices Report");
+  useEffect(() => {
+    void (async () => {
+      await loadInvoices();
+    })();
+  }, [loadInvoices]);
 
-    ws.columns = [
-      { header: "Tanggal", key: "date", width: 20 },
-      { header: "No. Faktur", key: "invoice_number", width: 25 },
-      { header: "Customer", key: "customer", width: 25 },
-      { header: "Amount", key: "amount", width: 20 },
-      { header: "Metode Pembayaran", key: "payment_method", width: 25 },
-      { header: "Status", key: "status", width: 18 },
+  const exportToExcel = () => {
+    const columns = [
+      { header: "Tanggal", key: "date" },
+      { header: "No. Faktur", key: "invoice_number" },
+      { header: "Customer", key: "customer" },
+      { header: "Amount", key: "amount" },
+      { header: "Metode Pembayaran", key: "payment_method" },
+      { header: "Status", key: "status" },
     ];
 
-    invoices.forEach((inv) => {
-      ws.addRow({
-        date: inv.date,
-        invoice_number: inv.invoice_number,
-        customer: inv.customer,
-        amount: inv.amount,
-        payment_method: inv.payment_method ?? "-",
-        status: inv.status,
-      });
-    });
+    const rows = invoices.map((inv) => ({
+      date: inv.date,
+      invoice_number: inv.invoice_number,
+      customer: inv.customer,
+      amount: inv.amount,
+      payment_method: inv.payment_method ?? "-",
+      status: inv.status,
+    }));
 
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-    FileSaver.saveAs(blob, "Laporan-Faktur-dan-Pesanan.xlsx");
+    exportExcel("Laporan-Faktur-dan-Pesanan", "Rekapitulasi Faktur & Pesanan", columns, rows);
   };
 
   const exportToPDF = async () => {
@@ -87,7 +80,7 @@ export default function ReportsInvoicesScreen() {
   };
 
   if (loading)
-    return <ActivityIndicator size="large" color="navy" style={{ flex: 1, justifyContent: "center" }} />;
+    return <ActivityIndicator size="large" color={navy} style={{ flex: 1, justifyContent: "center" }} />;
 
   return (
     <>
@@ -99,13 +92,13 @@ export default function ReportsInvoicesScreen() {
       </View>
 
       <View style={styles.buttons}>
-        <Button title="Unduh Excel" onPress={exportToExcel} color="primary" />
-        <Button title="Unduh PDF" onPress={exportToPDF} color="secondary" />
+        <Button title="Unduh Excel" onPress={exportToExcel} color={navy} />
+        <Button title="Unduh PDF" onPress={exportToPDF} color={bronze} />
       </View>
 
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
         {loading ? (
-          <ActivityIndicator size="large" color="navy" style={{ flex: 1, justifyContent: "center" }} />
+          <ActivityIndicator size="large" color={navy} style={{ flex: 1, justifyContent: "center" }} />
         ) : (
           invoices.map((inv) => (
             <View key={inv.id} style={styles.row}>
@@ -132,8 +125,8 @@ const styles = StyleSheet.create({
     borderBottomColor: "#E5DFD1",
     backgroundColor: "#fff",
   },
-  title: { fontSize: 20, fontFamily: "Poppins_700Bold", color: "ink" },
-  sub: { fontSize: 12, color: "muted", marginBottom: 12 },
+  title: { fontSize: 20, fontFamily: "Poppins_700Bold", color: ink },
+  sub: { fontSize: 12, color: muted, marginBottom: 12 },
   buttons: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -151,10 +144,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#E5DFD1",
   },
-  date: { fontSize: 12, color: "muted" },
+  date: { fontSize: 12, color: muted },
   invoice_number: { fontFamily: "Poppins_600SemiBold", width: 100 },
   customer: { flex: 1 },
-  amount: { fontSize: 12, color: "muted" },
-  payment: { fontSize: 11, color: "muted" },
+  amount: { fontSize: 12, color: muted },
+  payment: { fontSize: 11, color: muted },
   status: { fontSize: 11, paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 },
 });
