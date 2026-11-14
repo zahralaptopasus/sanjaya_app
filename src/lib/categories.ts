@@ -53,10 +53,10 @@ export async function updateCategory(id: string, patch: Partial<Category>): Prom
     .from('categories')
     .update({ ...patch, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .select()
-    .single();
+    .select();
   if (error) throw error;
-  return data;
+  if (!data?.[0]) throw new Error('Kategori tidak ditemukan atau gagal diperbarui');
+  return data[0];
 }
 
 export async function deleteCategory(id: string): Promise<void> {

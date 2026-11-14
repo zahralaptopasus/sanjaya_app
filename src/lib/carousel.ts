@@ -49,10 +49,10 @@ export async function updateCarouselSlide(id: string, patch: Partial<CarouselSli
     .from('carousel_slides')
     .update({ ...patch, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .select()
-    .single();
+    .select();
   if (error) throw error;
-  return data;
+  if (!data?.[0]) throw new Error('Slide tidak ditemukan atau gagal diperbarui');
+  return data[0];
 }
 
 export async function deleteCarouselSlide(id: string): Promise<void> {
