@@ -7,6 +7,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useCategories } from '../../context/CategoriesContext';
 import { COMMON_ICONS } from '../../lib/categories';
+import { supabase } from '../../lib/supabase';
 import { navy, surface, cardBg, chipBg, muted, ink, amber } from '../../theme';
 
 // ===== TYPE =====
@@ -105,6 +106,13 @@ export default function AdminCategoriesScreen() {
     }
     setSaving(true);
     try {
+      // cek sesi Supabase: update kategori melalui RLS butuh user terautentikasi sebagai admin
+      const { data: { user }, error: authErr } = await supabase.auth.getUser();
+      if (authErr || !user) {
+        Alert.alert('Login Dulu', 'Anda harus login sebagai admin untuk menyimpan kategori.');
+        setSaving(false);
+        return;
+      }
       if (modalMode === 'add') {
         // buat id (slug) dari label: ubah karakter selain huruf/angka jadi "-"
         const newId = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -114,7 +122,10 @@ export default function AdminCategoriesScreen() {
       }
       closeModal();
     } catch (e: any) {
-      Alert.alert('Gagal', e?.message ?? 'Tidak bisa simpan kategori');
+      const msg = e?.message?.includes('406') || e?.message?.includes('RLS')
+        ? 'Anda tidak memiliki akses admin. Silakan login sebagai admin.'
+        : e?.message ?? 'Tidak bisa simpan kategori';
+      Alert.alert('Gagal', msg);
     } finally {
       setSaving(false);
     }
