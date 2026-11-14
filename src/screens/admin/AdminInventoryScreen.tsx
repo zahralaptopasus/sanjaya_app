@@ -278,6 +278,21 @@ export default function AdminInventoryScreen() {
       return;
     }
 
+    // normalisasi kode produk (huruf besar, tanpa spasi)
+    const c = code.trim().toUpperCase();
+
+    // cek duplikat kode (abaikan produk yang sedang diedit)
+    const duplicate = products.some(
+      p => p.id !== editProductId && p.code.toUpperCase() === c
+    );
+    if (duplicate) {
+      Alert.alert(
+        'Kode sudah digunakan',
+        `Kode "${c}" telah digunakan oleh produk lain.`
+      );
+      return;
+    }
+
     // menandai bahwa proses simpan sedang berjalan
     setSaving(true);
 
@@ -308,7 +323,7 @@ export default function AdminInventoryScreen() {
       const categoryLabel = selectedCategory?.label ?? selectedCategoryId;
 
       const productData = {
-        code: code.trim().toUpperCase(),
+        code: c,
         name: type.trim() ? `${type.trim()} - ${name.trim()}` : name.trim(),
         category: categoryLabel,
         unit: unit.trim(),
@@ -347,6 +362,18 @@ export default function AdminInventoryScreen() {
       // bedakan error upload vs database
       const isUploadError =
         e?.message?.includes("upload") || e?.message?.includes("Storage");
+      // error duplikat kode dari database (UNIQUE constraint)
+      const isDuplicateCode =
+        e?.code === "23505" ||
+        e?.message?.toLowerCase().includes("duplicate key") ||
+        e?.message?.toLowerCase().includes("unique");
+      if (isDuplicateCode) {
+        Alert.alert(
+          "Kode sudah digunakan",
+          `Kode "${c}" telah digunakan oleh produk lain.`
+        );
+        return;
+      }
       Alert.alert(
         "Gagal",
         isUploadError
