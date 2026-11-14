@@ -8,10 +8,10 @@ import { supabase } from "../../lib/supabase";
 interface SalesItem {
   id: string;
   date: string;
-  invoice?: string;
-  customer?: string;
+  invoice: string;
+  customer: string;
   subtotal: number;
-  payment_method?: string;
+  payment_method: string;
   status: "lunas" | "belum lunas" | "pending";
 }
 
@@ -19,31 +19,27 @@ export default function ReportsSalesScreen() {
   const [sales, setSales] = useState<SalesItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Coba ambil dari purchase_orders sebagai placeholder, atau table orders jika ada
   const loadSales = async () => {
     try {
-      // Coba ambil dari purchase_orders (ini memang pembelian, bukan jual)
-      // Tapi kita tampilkan pesan bahwa data penjualan belum tersedia
       const { data, error } = await supabase
-        .from("purchase_orders")
-        .select("id, total, status, created_at")
+        .from("orders")
+        .select("id, code, total, status, payment_method, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      // Transform jadi format sales (tapi ini memang data pembelian)
-      const transformed = (data || []).map((po: any) => ({
-        id: po.id,
-        date: po.created_at,
-        invoice: po.code,
-        customer: "Supplier", // bukan pelanggan
-        subtotal: po.total ?? 0,
-        payment_method: "Transfer",
-        status: po.status === "diterima" ? "lunas" : "pending",
+      const transformed = (data || []).map((o: any) => ({
+        id: o.id,
+        date: o.created_at,
+        invoice: o.code,
+        customer: o.customer,
+        subtotal: o.total ?? 0,
+        payment_method: o.payment_method ?? "-",
+        status: o.status === "completed" || o.status === "paid" ? "lunas" : "belum lunas",
       }));
       setSales(transformed);
       setLoading(false);
     } catch (e) {
       setLoading(false);
-      Alert.alert("Data Tidak Tersedia", "Table `orders` untuk laporan penjualan belum dibuat. Struktur laporan siap, butuh table `orders` di Supabase.");
+      Alert.alert("Error", "Gagal load data orders: " + (e?.message ?? ""));
     }
   };
 
@@ -99,8 +95,6 @@ export default function ReportsSalesScreen() {
         <Text style={styles.title}>Laporan Rekapitulasi Penjualan</Text>
         <Text style={styles.sub}>
           Rekap seluruh transaksi pesanan per periode tanggal beserta subtotal dan pendapatan bersih.
-          <br />
-          <small style={{ color: "muted" }>": catatan: Table `orders` belum dibuat, menampilkan data purchase_orders sebagai referensi."</small>
         </Text>
       </View>
 
@@ -119,7 +113,7 @@ export default function ReportsSalesScreen() {
               <Text style={styles.invoice}>{s.invoice}</Text>
               <Text style={styles.customer}>{s.customer}</Text>
               <Text style={styles.subtotal}>Rp {s.subtotal?.toLocaleString() ?? "-"}</Text>
-              <Text style={styles.payment}>{s.payment_method ?? "-"}</Text>
+              <Text style={styles.payment}>{s.payment_method}</Text>
               <Text style={styles.status}>
                 {s.status === "lunas" ? "Lunas" : "Belum Bayar"}
               </Text>
@@ -139,12 +133,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   title: { fontSize: 20, fontFamily: "Poppins_700Bold", color: "ink" },
-  sub: {
-    fontSize: 12,
-    color: "muted",
-    marginBottom: 12,
-    // Include the note inline
-  },
+  sub: { fontSize: 12, color: "muted", marginBottom: 12 },
   buttons: {
     flexDirection: "row",
     justifyContent: "space-between",

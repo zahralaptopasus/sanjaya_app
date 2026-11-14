@@ -12,7 +12,7 @@ interface ShippingItem {
   address: string;
   courier?: string;
   tracking_number?: string;
-  status: "dikirim" | "dalam perjalanan" | "tiba" | "batal";
+  status: "dikirim" | "dalam_perjalanan" | "tiba" | "batal";
 }
 
 export default function ReportsShippingScreen() {
@@ -21,28 +21,25 @@ export default function ReportsShippingScreen() {
 
   const loadShipments = async () => {
     try {
-      // Coba ambil dari purchase_orders atau buat data placeholder
-      // Dalam implementasi sebenarnya butuh table pengiriman (shipping/delivery)
       const { data, error } = await supabase
-        .from("purchase_orders")
-        .select("id, code, total, status, created_at")
+        .from("shipments")
+        .select("id, order_id, customer, address, courier, tracking_number, status, shipped_at, delivered_at, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      // Transform jadi format shipping (ini memang data PO, bukan pengiriman pelanggan)
-      const transformed = (data || []).map((po: any) => ({
-        id: po.id,
-        date: po.created_at,
-        customer: "Pelanggan " + po.id,
-        address: "Alamat pengiriman",
-        courier: "-",
-        tracking_number: "-",
-        status: po.status === "diterima" ? "tiba" : "dikirim",
+      const transformed = (data || []).map((s: any) => ({
+        id: s.id,
+        date: s.created_at,
+        customer: s.customer,
+        address: s.address ?? "-",
+        courier: s.courier ?? "-",
+        tracking_number: s.tracking_number ?? "-",
+        status: s.status,
       }));
       setShipments(transformed);
       setLoading(false);
     } catch (e) {
       setLoading(false);
-      Alert.alert("Data Tidak Tersedia", "Table pengiriman belum dibuat. Struktur laporan siap, butuh table `shipments` di Supabase.");
+      Alert.alert("Error", "Gagal load data shipments: " + (e?.message ?? ""));
     }
   };
 
@@ -68,8 +65,8 @@ export default function ReportsShippingScreen() {
         date: s.date,
         customer: s.customer,
         address: s.address,
-        courier: s.courier ?? "-",
-        tracking_number: s.tracking_number ?? "-",
+        courier: s.courier,
+        tracking_number: s.tracking_number,
         status: s.status,
       });
     });
@@ -115,8 +112,8 @@ export default function ReportsShippingScreen() {
               <Text style={styles.date}>{s.date}</Text>
               <Text style={styles.customer}>{s.customer}</Text>
               <Text style={styles.address}>{s.address}</Text>
-              <Text style={styles.courier}>{s.courier ?? "-"}</Text>
-              <Text style={styles.tracking}>{s.tracking_number ?? "-"}</Text>
+              <Text style={styles.courier}>{s.courier}</Text>
+              <Text style={styles.tracking}>{s.tracking_number}</Text>
               <Text style={styles.status}>{s.status}</Text>
             </View>
           ))

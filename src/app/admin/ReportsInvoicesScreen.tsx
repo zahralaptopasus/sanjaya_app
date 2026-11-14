@@ -21,26 +21,25 @@ export default function ReportsInvoicesScreen() {
 
   const loadInvoices = async () => {
     try {
-      // Coba ambil dari purchase_orders sebagai placeholder
       const { data, error } = await supabase
-        .from("purchase_orders")
-        .select("id, code, total, status, created_at")
+        .from("invoices")
+        .select("id, order_id, code, customer, amount, status, payment_method, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      const transformed = (data || []).map((po: any) => ({
-        id: po.id,
-        date: po.created_at,
-        invoice_number: po.code,
-        customer: "Supplier",
-        amount: po.total ?? 0,
-        status: po.status === "diterima" ? "lunas" : "belum lunas",
-        payment_method: "Transfer",
+      const transformed = (data || []).map((i: any) => ({
+        id: i.id,
+        date: i.created_at,
+        invoice_number: i.code,
+        customer: i.customer,
+        amount: i.amount ?? 0,
+        status: i.status,
+        payment_method: i.payment_method,
       }));
       setInvoices(transformed);
       setLoading(false);
     } catch (e) {
       setLoading(false);
-      Alert.alert("Data Tidak Tersedia", "Table `invoices` atau `orders` belum dibuat.");
+      Alert.alert("Error", "Gagal load data invoices: " + (e?.message ?? ""));
     }
   };
 
@@ -96,8 +95,6 @@ export default function ReportsInvoicesScreen() {
         <Text style={styles.title}>Rekapitulasi Faktur & Pesanan</Text>
         <Text style={styles.sub}>
           Rincian detail pesanan pelanggan, nomor nota tagihan, dan status pembayaran lunas.
-          <br />
-          <small style={{ color: "muted" }}>": catatan: Table `invoices` atau `orders` belum dibuat."</small>
         </Text>
       </View>
 
@@ -113,7 +110,7 @@ export default function ReportsInvoicesScreen() {
           invoices.map((inv) => (
             <View key={inv.id} style={styles.row}>
               <Text style={styles.date}>{inv.date}</Text>
-              <Text style={styles.invoice}>{inv.invoice_number}</Text>
+              <Text style={styles.invoice_number}>{inv.invoice_number}</Text>
               <Text style={styles.customer}>{inv.customer}</Text>
               <Text style={styles.amount}>Rp {inv.amount?.toLocaleString() ?? "-"}</Text>
               <Text style={styles.payment}>{inv.payment_method ?? "-"}</Text>
@@ -136,11 +133,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   title: { fontSize: 20, fontFamily: "Poppins_700Bold", color: "ink" },
-  sub: {
-    fontSize: 12,
-    color: "muted",
-    marginBottom: 12,
-  },
+  sub: { fontSize: 12, color: "muted", marginBottom: 12 },
   buttons: {
     flexDirection: "row",
     justifyContent: "space-between",
