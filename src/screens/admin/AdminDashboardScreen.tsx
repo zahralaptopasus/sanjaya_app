@@ -172,10 +172,11 @@ export default function AdminDashboardScreen() {
         ) : (
           // tampilkan maksimal 8 barang agar ringkas
           stats.lowStock.slice(0, 8).map((p) => (
-            <View key={p.id} style={styles.lowRow}>
-              <Text style={styles.lowCode}>{p.code}</Text>
-              <Text style={styles.lowName} numberOfLines={1}>{p.name}</Text>
-              <Text style={styles.lowStock}>Sisa {p.stock}</Text>
+            <View key={p.id || `${p.code}-${p.name}`} style={styles.lowRow}>
+              {/* fallback: jangan tampilkan teks "undefined"/kosong jika data tidak lengkap */}
+              <Text style={styles.lowCode}>{p.code || '-'}</Text>
+              <Text style={styles.lowName} numberOfLines={1}>{p.name || '(tanpa nama)'}</Text>
+              <Text style={styles.lowStock}>Sisa {Number.isFinite(p.stock) ? p.stock : 0}</Text>
             </View>
           ))
         )}
