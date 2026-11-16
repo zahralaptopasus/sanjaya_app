@@ -58,6 +58,11 @@ export default function AdminCarouselScreen() {
   const [order, setOrder] = useState(99);
   const [isActive, setIsActive] = useState(true);
   const [imageUri, setImageUri] = useState<string | null>(null);
+  // data base64 + mime gambar yang dipilih (untuk upload tanpa fetch file lokal)
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const [imageMime, setImageMime] = useState<string | null>(null);
+  // pesan error di dalam modal (Alert.alert tidak tampil di web)
+  const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
 
@@ -87,6 +92,9 @@ export default function AdminCarouselScreen() {
     setOrder(slides.length > 0 ? Math.max(...slides.map(s => s.order)) + 1 : 1);
     setIsActive(true);
     setImageUri(null);
+    setImageBase64(null);
+    setImageMime(null);
+    setFormError(null);
     setModalMode("add");
     setEditSlide(null);
     setModalOpen(true);
@@ -104,6 +112,9 @@ export default function AdminCarouselScreen() {
     setOrder(s.order);
     setIsActive(s.is_active);
     setImageUri(s.image_url);
+    setImageBase64(null);
+    setImageMime(null);
+    setFormError(null);
     setModalMode("edit");
     setEditSlide(s);
     setModalOpen(true);
@@ -123,6 +134,9 @@ export default function AdminCarouselScreen() {
     setOrder(99);
     setIsActive(true);
     setImageUri(null);
+    setImageBase64(null);
+    setImageMime(null);
+    setFormError(null);
   };
 
   // buka image picker (kamera / galeri)
@@ -135,8 +149,7 @@ export default function AdminCarouselScreen() {
     }
 
     if (!permissionResult.granted) {
-      Alert.alert(
-        "Izin ditolak",
+      setFormError(
         `Aplikasi butuh akses ${source === "camera" ? "kamera" : "galeri"} untuk memilih gambar.`,
       );
       return;
@@ -149,6 +162,7 @@ export default function AdminCarouselScreen() {
         allowsEditing: true,
         aspect: [16, 9],
         quality: 0.8,
+        base64: true,
       });
     } else {
       result = await ImagePicker.launchImageLibraryAsync({
@@ -156,29 +170,50 @@ export default function AdminCarouselScreen() {
         allowsEditing: true,
         aspect: [16, 9],
         quality: 0.8,
+        base64: true,
       });
     }
 
     if (!result.canceled && result.assets?.[0]?.uri) {
-      setImageUri(result.assets[0].uri);
+      const asset = result.assets[0];
+      setImageUri(asset.uri);
+      setImageBase64(asset.base64 ?? null);
+      // di native base64 dari picker berupa JPEG; di web ikuti mime asli file
+      setImageMime(
+        Platform.OS === "web" ? asset.mimeType ?? "image/jpeg" : "image/jpeg",
+      );
+      setFormError(null);
     }
   };
 
-  const clearImage = () => setImageUri(null);
+  const clearImage = () => {
+    setImageUri(null);
+    setImageBase64(null);
+    setImageMime(null);
+  };
 
   // simpan (create / update)
   const handleSave = async () => {
+    setFormError(null);
     if (!title.trim()) {
-      Alert.alert("Judul wajib diisi");
+      setFormError("Judul wajib diisi.");
       return;
     }
     setSaving(true);
+    let uploadErrorMessage: string | null = null;
     try {
       let finalImage: string | null = null;
       if (imageUri && !imageUri.startsWith("http")) {
         setUploadingImage(true);
         try {
-          finalImage = await adminUploadImage(imageUri);
+          finalImage = await adminUploadImage({
+            uri: imageUri,
+            base64: imageBase64,
+            mimeType: imageMime,
+          });
+        } catch (uploadErr: any) {
+          uploadErrorMessage = uploadErr?.message ?? "Gagal upload gambar";
+          throw uploadErr;
         } finally {
           setUploadingImage(false);
         }
@@ -206,7 +241,11 @@ export default function AdminCarouselScreen() {
       }
       closeModal();
     } catch (e: any) {
-      Alert.alert("Gagal", e?.message ?? "Tidak bisa simpan slide");
+      setFormError(
+        uploadErrorMessage
+          ? `Upload gambar gagal: ${uploadErrorMessage}`
+          : e?.message ?? "Tidak bisa simpan slide",
+      );
     } finally {
       setSaving(false);
     }
@@ -351,6 +390,14 @@ export default function AdminCarouselScreen() {
                 <Ionicons name="close" size={24} color={ink} />
               </TouchableOpacity>
             </View>
+
+            {/* pesan error (penting untuk web karena Alert.alert tidak tampil) */}
+            {formError ? (
+              <View style={styles.modalErrorBox}>
+                <Ionicons name="alert-circle" size={16} color="#B00020" />
+                <Text style={styles.modalErrorText}>{formError}</Text>
+              </View>
+            ) : null}
 
             <ScrollView style={styles.modalForm} keyboardShouldPersistTaps="handled">
               {/* Preview gambar */}
@@ -530,6 +577,8 @@ const styles = StyleSheet.create({
   modalSheet: { height: "88%", backgroundColor: surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 16 },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
   modalTitle: { fontSize: 16, fontFamily: "Poppins_700Bold", color: ink },
+  modalErrorBox: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#FFEBEB", borderWidth: 1, borderColor: "#F5B5B5", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 12 },
+  modalErrorText: { flex: 1, fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#B00020" },
 
   modalForm: { flex: 1, marginBottom: 8 },
   input: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#D8D2C4", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: ink, marginBottom: 12 },

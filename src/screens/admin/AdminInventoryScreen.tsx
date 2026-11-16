@@ -79,6 +79,11 @@ export default function AdminInventoryScreen() {
   const [unit, setUnit] = useState("pcs");
   const [location, setLocation] = useState("Gudang Utama");
   const [imageUri, setImageUri] = useState<string | null>(null);
+  // data base64 + mime gambar yang dipilih (dipakai untuk upload tanpa fetch file lokal)
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const [imageMime, setImageMime] = useState<string | null>(null);
+  // pesan error di dalam modal (Alert.alert tidak tampil di web)
+  const [formError, setFormError] = useState<string | null>(null);
 
   // state penanda proses penyimpanan sedang berjalan; awalnya false
   const [saving, setSaving] = useState(false);
@@ -151,6 +156,9 @@ export default function AdminInventoryScreen() {
     setUnit("pcs");
     setLocation("Gudang Utama");
     setImageUri(null);
+    setImageBase64(null);
+    setImageMime(null);
+    setFormError(null);
     setModalMode("add");
     setModalOpen(true);
   };
@@ -177,6 +185,9 @@ export default function AdminInventoryScreen() {
     setUnit(product.unit ?? "pcs");
     setLocation(product.location ?? "Gudang Utama");
     setImageUri(product.image || null);
+    setImageBase64(null);
+    setImageMime(null);
+    setFormError(null);
     setEditProductId(product.id);
     setModalMode("edit");
     setModalOpen(true);
@@ -197,6 +208,9 @@ export default function AdminInventoryScreen() {
     setUnit("pcs");
     setLocation("Gudang Utama");
     setImageUri(null);
+    setImageBase64(null);
+    setImageMime(null);
+    setFormError(null);
   };
 
   // fungsi untuk membuka image picker (kamera atau galeri)
@@ -211,14 +225,13 @@ export default function AdminInventoryScreen() {
     }
 
     if (!permissionResult.granted) {
-      Alert.alert(
-        "Izin ditolak",
+      setFormError(
         `Aplikasi butuh akses ${source === "camera" ? "kamera" : "galeri"} untuk memilih gambar.`,
       );
       return;
     }
 
-    // buka picker
+    // buka picker (base64: true supaya gambar bisa diunggah tanpa fetch file lokal)
     let result;
     if (source === "camera") {
       result = await ImagePicker.launchCameraAsync({
@@ -226,6 +239,7 @@ export default function AdminInventoryScreen() {
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
+        base64: true,
       });
     } else {
       result = await ImagePicker.launchImageLibraryAsync({
@@ -233,22 +247,36 @@ export default function AdminInventoryScreen() {
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
+        base64: true,
       });
     }
 
     if (!result.canceled && result.assets?.[0]?.uri) {
-      setImageUri(result.assets[0].uri);
+      const asset = result.assets[0];
+      setImageUri(asset.uri);
+      setImageBase64(asset.base64 ?? null);
+      // di native base64 dari picker berupa JPEG; di web ikuti mime asli file
+      setImageMime(
+        Platform.OS === "web" ? asset.mimeType ?? "image/jpeg" : "image/jpeg",
+      );
+      setFormError(null);
     }
   };
 
   // fungsi untuk menghapus gambar yang sudah dipilih
-  const clearImage = () => setImageUri(null);
+  const clearImage = () => {
+    setImageUri(null);
+    setImageBase64(null);
+    setImageMime(null);
+  };
 
   // fungsi "save" untuk menyimpan barang baru atau update existing
   const save = async () => {
+    // bersihkan error lama
+    setFormError(null);
     // jika kode atau nama kosong (setelah spasi dihapus), tampilkan peringatan dan hentikan fungsi
     if (!code.trim() || !name.trim()) {
-      Alert.alert("Lengkapi dulu", "Kode barang dan nama barang wajib diisi.");
+      setFormError("Kode barang dan nama barang wajib diisi.");
       return;
     }
     // mengubah teks harga menjadi angka dan menyimpannya di p
@@ -259,22 +287,22 @@ export default function AdminInventoryScreen() {
     const is = Number(initialStock);
     // jika harga bukan angka valid atau <= 0, tampilkan peringatan dan hentikan fungsi
     if (isNaN(p) || p <= 0) {
-      Alert.alert("Harga salah", "Masukkan harga lebih dari 0.");
+      setFormError("Masukkan harga lebih dari 0.");
       return;
     }
     // jika harga beli bukan angka valid atau < 0
     if (isNaN(pp) || pp < 0) {
-      Alert.alert("Harga beli salah", "Masukkan harga beli 0 atau lebih.");
+      setFormError("Masukkan harga beli 0 atau lebih.");
       return;
     }
     // jika stok bukan angka valid atau < 0, tampilkan peringatan dan hentikan fungsi
     if (isNaN(s) || s < 0) {
-      Alert.alert("Stok salah", "Masukkan stok 0 atau lebih.");
+      setFormError("Masukkan stok 0 atau lebih.");
       return;
     }
     // jika stok awal bukan angka valid atau < 0
     if (isNaN(is) || is < 0) {
-      Alert.alert("Stok awal salah", "Masukkan stok awal 0 atau lebih.");
+      setFormError("Masukkan stok awal 0 atau lebih.");
       return;
     }
 
@@ -286,15 +314,14 @@ export default function AdminInventoryScreen() {
       p => p.id !== editProductId && p.code.toUpperCase() === c
     );
     if (duplicate) {
-      Alert.alert(
-        'Kode sudah digunakan',
-        `Kode "${c}" telah digunakan oleh produk lain.`
-      );
+      setFormError(`Kode "${c}" telah digunakan oleh produk lain.`);
       return;
     }
 
     // menandai bahwa proses simpan sedang berjalan
     setSaving(true);
+    // menyimpan pesan error upload (jika ada) agar bisa dibedakan dari error database
+    let uploadErrorMessage: string | null = null;
 
     // blok try: jalankan kode yang mungkin gagal
     try {
@@ -304,9 +331,14 @@ export default function AdminInventoryScreen() {
       if (imageUri && !imageUri.startsWith("http")) {
         setUploadingImage(true);
         try {
-          finalImageUrl = await adminUploadImage(imageUri);
+          finalImageUrl = await adminUploadImage({
+            uri: imageUri,
+            base64: imageBase64,
+            mimeType: imageMime,
+          });
         } catch (uploadErr: any) {
-          throw new Error(uploadErr?.message ?? "Gagal upload gambar");
+          uploadErrorMessage = uploadErr?.message ?? "Gagal upload gambar";
+          throw uploadErr;
         } finally {
           setUploadingImage(false);
         }
@@ -344,9 +376,9 @@ export default function AdminInventoryScreen() {
       }
 
       // memuat ulang daftar produk agar perubahan tampil
-      load();
+      await load();
 
-      // notifikasi berhasil
+      // notifikasi berhasil (di web Alert tidak tampil, tapi modal tetap tertutup)
       Alert.alert(
         "Berhasil",
         modalMode === "edit"
@@ -359,29 +391,25 @@ export default function AdminInventoryScreen() {
       closeModal();
       // blok catch: dijalankan jika terjadi error pada try
     } catch (e: any) {
-      // bedakan error upload vs database
-      const isUploadError =
-        e?.message?.includes("upload") || e?.message?.includes("Storage");
       // error duplikat kode dari database (UNIQUE constraint)
       const isDuplicateCode =
         e?.code === "23505" ||
         e?.message?.toLowerCase().includes("duplicate key") ||
         e?.message?.toLowerCase().includes("unique");
       if (isDuplicateCode) {
-        Alert.alert(
-          "Kode sudah digunakan",
-          `Kode "${c}" telah digunakan oleh produk lain.`
-        );
+        setFormError(`Kode "${c}" telah digunakan oleh produk lain.`);
         return;
       }
-      Alert.alert(
-        "Gagal",
-        isUploadError
-          ? `Upload gambar gagal: ${e?.message ?? "Unknown error"}`
-          : modalMode === "edit"
+      // tampilkan error upload secara spesifik, sisanya error database
+      if (uploadErrorMessage) {
+        setFormError(`Upload gambar gagal: ${uploadErrorMessage}`);
+      } else {
+        setFormError(
+          modalMode === "edit"
             ? `Update gagal: ${e?.message ?? "Unknown error"}`
             : `Tambah gagal: ${e?.message ?? "Unknown error"}`,
-      );
+        );
+      }
       // blok finally: selalu dijalankan baik sukses maupun gagal
     } finally {
       // mengakhiri status menyimpan
@@ -621,6 +649,14 @@ export default function AdminInventoryScreen() {
                 <Ionicons name="close" size={24} color={ink} />
               </TouchableOpacity>
             </View>
+
+            {/* pesan error (penting untuk web karena Alert.alert tidak tampil) */}
+            {formError ? (
+              <View style={styles.modalErrorBox}>
+                <Ionicons name="alert-circle" size={16} color="#B00020" />
+                <Text style={styles.modalErrorText}>{formError}</Text>
+              </View>
+            ) : null}
 
             {/* area form yang bisa digulir (agar field bawah tetap terjangkau) */}
             <ScrollView
@@ -1012,6 +1048,25 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalTitle: { fontSize: 16, fontFamily: "Poppins_700Bold", color: ink },
+  // kotak pesan error di modal
+  modalErrorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FFEBEB",
+    borderWidth: 1,
+    borderColor: "#F5B5B5",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  modalErrorText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: "#B00020",
+  },
   // preview gambar di modal
   modalImagePreview: {
     position: "relative",

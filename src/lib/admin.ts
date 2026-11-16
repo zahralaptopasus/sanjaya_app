@@ -2,6 +2,8 @@
 
 // mengambil klien Supabase untuk akses database (CRUD, RPC, query)
 import { supabase } from './supabase';
+// mengambil helper base64 -> byte agar gambar dari HP bisa diunggah tanpa fetch(file://)
+import { base64ToBytes } from './account';
 // mengambil tipe data domain Product, Order, dan Supplier
 import type { Product, Order } from '../models';
 // productFromMap: normalisasi kolom DB (snake_case) => tipe Product (camelCase + image)
@@ -14,22 +16,60 @@ const PRODUCT_IMAGES_BUCKET = 'product-images';
 export const LOW_STOCK_THRESHOLD = 10; // ambang batas stok rendah (low stock) untuk peringatan di dashboard admin
 export const isLowStock = (stock: number) => stock <= LOW_STOCK_THRESHOLD; // helper untuk cek apakah stok rendah
 export type LowStockItem = { id: string; code: string; name: string; stock: number }; // tipe data untuk item stok rendah
-// upload file gambar ke Supabase Storage dan kembalikan public URL
-export async function adminUploadImage(fileUri: string): Promise<string> {
-  // ekstrak nama file dari URI
-  const fileName = fileUri.split('/').pop() ?? `product-${Date.now()}.jpg`;
-  // buat path unik: timestamp + nama file
-  const filePath = `${Date.now()}-${fileName}`;
+export type UploadImageInput = {
+  // lokasi file di perangkat / URL gambar
+  uri: string;
+  // data base64 dari image picker (dipakai di HP & browser)
+  base64?: string | null;
+  // tipe mime gambar (mis. image/jpeg)
+  mimeType?: string | null;
+  // nama file asli (opsional)
+  fileName?: string | null;
+};
 
-  // baca file sebagai base64 (React Native)
-  const response = await fetch(fileUri);
-  const blob = await response.blob();
+// upload file gambar ke Supabase Storage dan kembalikan public URL
+// - kalau ada base64: byte diunggah langsung (aman untuk file:// / content:// di HP)
+// - kalau tidak ada: fallback fetch untuk URL http(s) / blob
+export async function adminUploadImage(
+  input: string | UploadImageInput,
+): Promise<string> {
+  // dukung pemanggilan lama yang hanya mengirim string URI
+  const { uri, base64, mimeType, fileName } =
+    typeof input === 'string'
+      ? { uri: input, base64: null, mimeType: null, fileName: null }
+      : input;
+
+  // ambil nama file dari metadata / URI, lalu bersihkan karakter yang tidak aman
+  const rawName =
+    fileName || uri.split('/').pop() || `product-${Date.now()}.jpg`;
+  let safeName = rawName.replace(/[^a-zA-Z0-9._-]/g, '-');
+  // pastikan ada ekstensi supaya mudah dikenali
+  if (!/\.[a-z0-9]{2,5}$/i.test(safeName)) safeName = `${safeName}.jpg`;
+
+  // buat path unik: timestamp + nama file
+  const filePath = `${Date.now()}-${safeName}`;
+
+  // siapkan isi upload
+  let payload: any;
+  let contentType = mimeType || 'image/jpeg';
+
+  if (base64) {
+    // jalur utama (HP & browser): konversi base64 ke byte
+    payload = base64ToBytes(base64);
+  } else {
+    // fallback: baca dari URL (mis. gambar lama yang berupa http/blob)
+    const response = await fetch(uri);
+    if (!response.ok) throw new Error('Gagal membaca file gambar.');
+    const blob = await response.blob();
+    payload = new Uint8Array(await blob.arrayBuffer());
+    contentType = blob.type || contentType;
+  }
 
   // upload ke Supabase Storage
   const { error: uploadError } = await supabase.storage
     .from(PRODUCT_IMAGES_BUCKET)
-    .upload(filePath, blob, {
-      contentType: blob.type || 'image/jpeg',
+    .upload(filePath, payload, {
+      contentType,
       upsert: false,
     });
 

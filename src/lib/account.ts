@@ -196,7 +196,7 @@ export async function removeAvatar(): Promise<AccountResult> {
 // ===== HELPER =====
 
 // mengubah string base64 menjadi Uint8Array tanpa library tambahan
-function base64ToBytes(b64: string): Uint8Array {
+export function base64ToBytes(b64: string): Uint8Array {
   // tabel karakter base64 standar
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
   // peta nilai karakter -> index
