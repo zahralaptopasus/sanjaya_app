@@ -385,7 +385,8 @@ export async function adminGetSales({ startDate, endDate }: { startDate?: string
 // - totalOmset: omset dihitung dari sum(price*qty) order_items (pendekatan detail item)
 export async function adminStats() {
   const {count: totalBarang} = await supabase.from('products').select('*', { count: 'exact', head: true });
-  const {data: stocks, error: stockErr} = await supabase.from('products').select('stock');
+  // ambil id, code, name, stock sekaligus: lowStock butuh code & name, bukan cuma stock
+  const {data: stocks, error: stockErr} = await supabase.from('products').select('id, code, name, stock');
 
   if (stockErr) 
    return { totalBarang: 0, totalStok: 0, totalPenjualan: 0, totalOmset: 0, lowStock: [] as LowStockItem[] };
@@ -395,7 +396,7 @@ export async function adminStats() {
    const lowStock: LowStockItem[] = arr
     .filter((p) => isLowStock(p.stock))
     .sort((a, b) => (a.stock ?? 0) - (b.stock ?? 0))
-    .map((p) => ({ id: String(p.id), code: String(p.code), name: String(p.name), stock: Number(p.stock ?? 0) }));
+    .map((p) => ({ id: String(p.id ?? ''), code: String(p.code ?? ''), name: String(p.name ?? ''), stock: Number(p.stock ?? 0) }));
 
    const { data: orders, error: orderErr } = await supabase
     .from('orders')
