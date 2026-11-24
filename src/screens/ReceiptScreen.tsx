@@ -150,6 +150,10 @@ export default function ReceiptScreen({ navigation, route }: any) {
     paymentMethod: paramPaymentMethod,
     // status awal (mis. COD 'pending') agar struk tidak sempat menampilkan status lain
     initialStatus,
+    // info pengiriman (opsional) untuk kartu pelacakan
+    courierName,
+    trackingNumber,
+    shippingAddress,
   } = route?.params ?? {};
 
   // menyiapkan daftar item untuk struk; jika tidak ada parameter, pakai data demo
@@ -240,8 +244,10 @@ export default function ReceiptScreen({ navigation, route }: any) {
   // menentukan status tampilan struk berdasarkan status database
   // s berisi status DB (lowercase); jika tidak ada data, anggap sudah lunas (perilaku lama)
   const s = String(dbStatus ?? '').toLowerCase();
-  // statusPaid: benar-benar lunas (atau data tidak tersedia)
-  const statusPaid = dbStatus === null || s === 'paid' || s === 'settlement' || s === 'capture';
+  // statusPaid: benar-benar lunas (atau data tidak tersedia); dikirim/selesai juga lunas
+  const statusShipped = s === 'dikirim';
+  const statusDone = s === 'selesai';
+  const statusPaid = dbStatus === null || s === 'paid' || s === 'settlement' || s === 'capture' || statusShipped || statusDone;
   // statusPending: menunggu pembayaran
   const statusPending = !statusPaid && s === 'pending';
   // statusFailed: gagal / batal / lainnya
@@ -373,7 +379,7 @@ export default function ReceiptScreen({ navigation, route }: any) {
           <View style={[styles.check, { backgroundColor: statusFailed ? c.danger + '33' : statusPending ? c.accent + '66' : c.primarySoft }]}>
             {/* ikon sesuai status: silang (gagal), jam pasir (menunggu), centang (berhasil) */}
             <Ionicons
-              name={statusFailed ? 'close' : codPending ? 'cash-outline' : statusPending ? 'hourglass-outline' : 'checkmark'}
+              name={statusFailed ? 'close' : statusDone ? 'checkmark-done' : statusShipped ? 'car-sport' : codPending ? 'cash-outline' : statusPending ? 'hourglass-outline' : 'checkmark'}
               size={30}
               color={statusFailed ? c.danger : statusPending ? c.warn : c.warn}
             />
@@ -381,19 +387,75 @@ export default function ReceiptScreen({ navigation, route }: any) {
         </View>
         {/* judul sesuai status */}
         <Text style={{ fontSize: 22, fontFamily: 'Inter_800ExtraBold',  color: c.text, marginTop: 8 }}>
-          {statusFailed ? 'Pembayaran Gagal' : codPending ? 'Pesanan Dibuat' : statusPending ? 'Menunggu Pembayaran' : 'Pembayaran Berhasil!'}
+          {statusFailed ? 'Pembayaran Gagal' : statusDone ? 'Pesanan Selesai' : statusShipped ? 'Pesanan Dikirim' : codPending ? 'Pesanan Dibuat' : statusPending ? 'Menunggu Pembayaran' : 'Pembayaran Berhasil!'}
         </Text>
         {/* keterangan sesuai status */}
         <Text style={{ textAlign: 'center', color: c.textMuted, fontSize: 13, marginTop: 4 }}>
           {statusFailed
             ? 'Pembayaran tidak selesai. Silakan cek Riwayat Pesanan atau ulangi pemesanan.'
+            : statusDone
+            ? 'Pesanan telah sampai di tujuan. Terima kasih telah berbelanja.'
+            : statusShipped
+            ? 'Pesanan sedang dalam perjalanan menuju alamat tujuan.'
             : codPending
-            ? 'Silakan bayar tunai saat pengambilan unit motor. Status otomatis menjadi LUNAS setelah admin mengonfirmasi — cek Riwayat Pesanan.'
+            ? 'Silakan bayar tunai ke kurir saat pesanan tiba.'
             : statusPending
             ? 'Pembayaran sedang diverifikasi. Status otomatis menjadi Lunas setelah dikonfirmasi — cek Riwayat Pesanan.'
             : 'Terima kasih, pesanan Anda telah diverifikasi oleh tim Sanjaya Motor.'}
         </Text>
       </View>
+
+      {/* ===== KARTU PELACAKAN PENGIRIMAN (STATIS) ===== */}
+      {(statusShipped || statusDone) ? (
+        <View style={styles.card}>
+          <View style={{ padding: 16 }}>
+            <Text style={{ fontSize: 14, fontFamily: 'Inter_800ExtraBold', color: c.text, marginBottom: 2 }}>
+              {statusDone ? 'Terkirim' : 'Sedang dalam perjalanan'}
+            </Text>
+            <Text style={{ fontSize: 11, color: c.textMuted, marginBottom: 14 }}>
+              {courierName ? `Ekspedisi: ${courierName}` : 'Pengiriman ekspedisi'}
+              {trackingNumber ? ` • Resi ${trackingNumber}` : ''}
+            </Text>
+
+            {/* peta statis: asal -> garis -> tujuan, ikon truk menandai posisi */}
+            <View style={{ position: 'relative', height: 70, justifyContent: 'center' }}>
+              {/* garis penghubung di tengah */}
+              <View
+                style={{
+                  position: 'absolute', left: 24, right: 24, top: 34,
+                  borderTopWidth: 3, borderColor: c.border, borderStyle: statusDone ? 'solid' : 'dashed',
+                }}
+              />
+              {/* titik asal (toko) */}
+              <View style={{ position: 'absolute', left: 0, top: 18, width: 48, alignItems: 'center' }}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: c.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="storefront" size={18} color={c.primary} />
+                </View>
+                <Text style={{ fontSize: 9, color: c.textMuted, marginTop: 2 }}>Toko</Text>
+              </View>
+              {/* titik tujuan (rumah) */}
+              <View style={{ position: 'absolute', right: 0, top: 18, width: 48, alignItems: 'center' }}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: statusDone ? c.primarySoft : c.chip, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="home" size={18} color={statusDone ? c.primary : c.textMuted} />
+                </View>
+                <Text style={{ fontSize: 9, color: c.textMuted, marginTop: 2 }}>Tujuan</Text>
+              </View>
+              {/* ikon truk: di tengah saat dikirim, di tujuan saat selesai */}
+              <View style={{ position: 'absolute', left: 24, right: 24, top: 12, alignItems: statusDone ? 'flex-end' : 'center' }}>
+                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name={statusDone ? 'checkmark-done' : 'car-sport'} size={16} color="#fff" />
+                </View>
+              </View>
+            </View>
+
+            {/* alamat tujuan + keterangan posisi */}
+            <Text style={{ fontSize: 11, color: c.textMuted, marginTop: 12, lineHeight: 16 }}>
+              {statusDone ? 'Paket sudah sampai ke alamat tujuan.' : 'Paket sedang diantar menuju alamat tujuan.'}
+              {shippingAddress ? `\n${shippingAddress}` : ''}
+            </Text>
+          </View>
+        </View>
+      ) : null}
 
       {/* kartu struk */}
       <View style={styles.card}>
@@ -411,7 +473,7 @@ export default function ReceiptScreen({ navigation, route }: any) {
             {/* badge status: LUNAS / MENUNGGU / GAGAL sesuai status database */}
             <View style={statusFailed ? styles.badgeFailed : statusPending ? styles.badgePending : styles.lunas}>
               <Text style={statusFailed ? styles.badgeFailedText : statusPending ? styles.badgePendingText : styles.lunasText}>
-                {statusFailed ? 'GAGAL' : codPending ? 'BAYAR DI TEMPAT' : statusPending ? 'MENUNGGU' : 'LUNAS'}
+                {statusFailed ? 'GAGAL' : statusDone ? 'SELESAI' : statusShipped ? 'DIKIRIM' : codPending ? 'BAYAR DI TEMPAT' : statusPending ? 'MENUNGGU' : 'LUNAS'}
               </Text>
             </View>
           </View>
@@ -498,7 +560,7 @@ export default function ReceiptScreen({ navigation, route }: any) {
           {statusPaid ? (
             <View style={styles.qrBox}>
               <Text style={{ fontFamily: 'Inter_800ExtraBold',  fontSize: 13, color: c.text }}>Kode Verifikasi Kasir / Mekanik</Text>
-              <Text style={{ textAlign: 'center', fontSize: 11, color: c.textMuted, marginTop: 2 }}>Tunjukkan kode ini saat pengambilan unit motor</Text>
+              <Text style={{ textAlign: 'center', fontSize: 11, color: c.textMuted, marginTop: 2 }}>Tunjukkan kode ini saat pesanan tiba</Text>
               <Text style={{ fontSize: 34, marginTop: 12 }}>▦▦▦</Text>
               <Text style={{ fontSize: 11, fontFamily: 'Inter_800ExtraBold',  letterSpacing: 1, marginTop: 8 }}>{orderId}</Text>
             </View>
@@ -535,7 +597,7 @@ export default function ReceiptScreen({ navigation, route }: any) {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.accent + '22', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 }}>
               <Ionicons name="cash-outline" size={18} color={c.warn} />
               <Text style={{ color: c.warn, fontSize: 12, fontFamily: 'Inter_700Bold', flexShrink: 1 }}>
-                Bayar tunai di toko saat pengambilan unit.
+                Bayar tunai ke kurir saat pesanan tiba.
               </Text>
             </View>
           ) : (

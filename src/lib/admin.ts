@@ -408,6 +408,8 @@ export async function adminGetSales({ startDate, endDate }: { startDate?: string
     paymentMethod: String(o.payment_method ?? 'midtrans'),
     total: Number(o.total),
     createdAt: String(o.created_at),
+    shippingAddress: o.shipping_address ?? null,
+    trackingNumber: o.tracking_number ?? null,
     items: ((o.order_items as any[]) ?? []).map((i) => ({
       name: String(i.name),
       qty: Number(i.qty),
@@ -774,4 +776,165 @@ export async function exportCSV(filename: string, headers: string[], rows: any[]
   } catch (e: any) {
     return { error: e?.message ?? 'Gagal export CSV' };
   }
+}
+
+// ===== EKSPEDISI (SHIPPING COURIERS) =====
+
+export type AdminCourier = {
+  id: string;
+  name: string;
+  price: number;
+  description: string | null;
+  isActive: boolean;
+};
+
+export type AdminCourierInput = {
+  name: string;
+  price: number;
+  description?: string | null;
+  isActive: boolean;
+};
+
+// ambil semua ekspedisi (admin, termasuk nonaktif)
+export async function adminGetAllCouriers(): Promise<AdminCourier[]> {
+  const { data, error } = await supabase
+    .from('shipping_couriers')
+    .select('*')
+    .order('name', { ascending: true });
+  if (error) {
+    console.warn('[adminGetAllCouriers] query gagal:', error.message);
+    return [];
+  }
+  return (data as any[]).map((r) => ({
+    id: String(r.id),
+    name: String(r.name),
+    price: Number(r.price ?? 0),
+    description: r.description ?? null,
+    isActive: Boolean(r.is_active),
+  }));
+}
+
+// tambah ekspedisi baru
+export async function adminAddCourier(input: AdminCourierInput): Promise<{ id: string } | { error: string }> {
+  const { data, error } = await supabase
+    .from('shipping_couriers')
+    .insert({
+      name: input.name,
+      price: input.price,
+      description: input.description ?? null,
+      is_active: input.isActive,
+    })
+    .select('id')
+    .single();
+  if (error) return { error: error.message };
+  return { id: data.id as string };
+}
+
+// update ekspedisi
+export async function adminUpdateCourier(id: string, input: Partial<AdminCourierInput>): Promise<{ error?: string }> {
+  const updateData: any = {};
+  if (input.name !== undefined) updateData.name = input.name;
+  if (input.price !== undefined) updateData.price = input.price;
+  if (input.description !== undefined) updateData.description = input.description;
+  if (input.isActive !== undefined) updateData.is_active = input.isActive;
+  updateData.updated_at = new Date().toISOString();
+  const { error } = await supabase.from('shipping_couriers').update(updateData).eq('id', id);
+  if (error) return { error: error.message };
+  return {};
+}
+
+// hapus ekspedisi (hard delete)
+export async function adminDeleteCourier(id: string): Promise<{ error?: string }> {
+  const { error } = await supabase.from('shipping_couriers').delete().eq('id', id);
+  if (error) return { error: error.message };
+  return {};
+}
+
+// ===== PESANAN ADMIN =====
+
+export type AdminOrderRow = {
+  id: string;
+  code: string;
+  status: string;
+  total: number;
+  paymentMethod: string;
+  shippingCost: number;
+  courierName: string | null;
+  trackingNumber: string | null;
+  shippingName: string | null;
+  shippingPhone: string | null;
+  shippingAddress: string | null;
+  createdAt: string;
+  itemCount: number;
+};
+
+// ambil semua pesanan (admin)
+export async function adminGetOrders(): Promise<AdminOrderRow[]> {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('id, code, status, total, payment_method, shipping_cost, courier_name, tracking_number, shipping_name, shipping_phone, shipping_address, created_at, order_items(id)')
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.warn('[adminGetOrders] query gagal:', error.message);
+    return [];
+  }
+  return (data as any[]).map((o) => ({
+    id: String(o.id),
+    code: String(o.code),
+    status: String(o.status),
+    total: Number(o.total ?? 0),
+    paymentMethod: String(o.payment_method ?? 'midtrans'),
+    shippingCost: Number(o.shipping_cost ?? 0),
+    courierName: o.courier_name ?? null,
+    trackingNumber: o.tracking_number ?? null,
+    shippingName: o.shipping_name ?? null,
+    shippingPhone: o.shipping_phone ?? null,
+    shippingAddress: o.shipping_address ?? null,
+    createdAt: String(o.created_at),
+    itemCount: Array.isArray(o.order_items) ? o.order_items.length : 0,
+  }));
+}
+
+// ubah status pesanan; bila 'dikirim' catat resi + baris shipment
+export async function adminUpdateOrderStatus(
+  orderId: string,
+  status: 'paid' | 'dikirim' | 'selesai',
+  trackingNumber?: string | null,
+): Promise<{ error?: string }> {
+  // catatan: tabel orders tidak punya kolom updated_at di semua environment,
+  // jadi jangan kirim kolom itu agar update tidak gagal.
+  const updateData: any = { status };
+  if (trackingNumber !== undefined) updateData.tracking_number = trackingNumber;
+  // .select() dipakai agar bisa mendeteksi update yang tidak mengenai baris apa pun
+  // (mis. ditolak RLS) — tanpa ini Supabase tidak mengembalikan error.
+  const { data: updated, error } = await supabase
+    .from('orders')
+    .update(updateData)
+    .eq('id', orderId)
+    .select('id, status');
+  if (error) return { error: error.message };
+  if (!updated || updated.length === 0) {
+    return { error: 'Status tidak berubah: tidak ada baris yang diperbarui. Cek hak akses admin (RLS policy tabel orders).' };
+  }
+
+  // saat dikirim, catat/ perbarui baris shipments
+  if (status === 'dikirim') {
+    const { data: ord } = await supabase
+      .from('orders')
+      .select('code, shipping_name, shipping_address, courier_name')
+      .eq('id', orderId)
+      .maybeSingle();
+    if (ord) {
+      await supabase.from('shipments').insert({
+        order_id: orderId,
+        customer: ord.shipping_name,
+        address: ord.shipping_address,
+        courier: ord.courier_name,
+        tracking_number: trackingNumber ?? null,
+        status: 'dikirim',
+        shipped_at: new Date().toISOString(),
+      });
+    }
+  }
+  return {};
 }

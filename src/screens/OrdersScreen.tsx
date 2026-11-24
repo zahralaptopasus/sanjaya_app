@@ -31,7 +31,7 @@ import { getRootNav } from '../lib/navigationHelpers';
 // ===== DEFINISI STATUS =====
 
 // kunci kelompok status yang dipakai untuk filter dan pewarnaan
-type Group = 'pending' | 'paid' | 'failed' | 'other';
+type Group = 'pending' | 'paid' | 'shipped' | 'done' | 'failed' | 'other';
 
 // memetakan status mentah dari database ke kelompok status aplikasi
 function groupOf(status: string): Group {
@@ -41,6 +41,10 @@ function groupOf(status: string): Group {
   if (s === 'paid' || s === 'settlement' || s === 'capture') return 'paid';
   // kelompok menunggu pembayaran
   if (s === 'pending') return 'pending';
+  // kelompok sedang dikirim
+  if (s === 'dikirim') return 'shipped';
+  // kelompok selesai
+  if (s === 'selesai') return 'done';
   // kelompok gagal / batal / kadaluarsa
   if (s === 'cancelled' || s === 'failed' || s === 'expired' || s === 'cancel' || s === 'deny') return 'failed';
   // sisanya netral
@@ -55,6 +59,10 @@ function styleOf(status: string, c: Palette) {
   if (g === 'pending') return { label: 'Menunggu', bg: c.accent + '33', color: c.warn };
   // lunas: hijau
   if (g === 'paid') return { label: 'Lunas', bg: c.success + '22', color: c.success };
+  // dikirim: biru
+  if (g === 'shipped') return { label: 'Dikirim', bg: c.primary + '18', color: c.primary };
+  // selesai: hijau tua
+  if (g === 'done') return { label: 'Selesai', bg: c.success + '22', color: c.success };
   // gagal/batal: merah
   if (g === 'failed') return { label: 'Gagal', bg: c.dangerSoft, color: c.danger };
   // lainnya: netral
@@ -66,6 +74,8 @@ const FILTERS: { key: 'all' | Group; label: string }[] = [
   { key: 'all', label: 'Semua' },
   { key: 'pending', label: 'Menunggu' },
   { key: 'paid', label: 'Lunas' },
+  { key: 'shipped', label: 'Dikirim' },
+  { key: 'done', label: 'Selesai' },
   { key: 'failed', label: 'Gagal' },
 ];
 
@@ -193,6 +203,10 @@ export default function OrdersScreen({ navigation }: any) {
       paymentMethod: item.paymentMethod ?? 'midtrans',
       // status awal agar tampilan struk tidak berkedip status lain
       initialStatus: item.status,
+      // info pengiriman untuk kartu pelacakan
+      courierName: item.courierName ?? null,
+      trackingNumber: item.trackingNumber ?? null,
+      shippingAddress: item.shippingAddress ?? null,
     });
   };
 
@@ -306,6 +320,8 @@ export default function OrdersScreen({ navigation }: any) {
           const isPending = groupOf(item.status) === 'pending';
           // apakah pesanan gagal/batal (tombolnya "Bayar Lagi")
           const isFailed = groupOf(item.status) === 'failed';
+          // apakah pesanan sedang dikirim / selesai (tombolnya "Lacak")
+          const isShipped = groupOf(item.status) === 'shipped' || groupOf(item.status) === 'done';
           return (
             <TouchableOpacity style={styles.card} activeOpacity={0.85} onPress={() => openReceipt(item)}>
               {/* garis status berwarna di tepi kiri kartu */}
@@ -348,6 +364,11 @@ export default function OrdersScreen({ navigation }: any) {
                       // pesanan menunggu: buka struk yang punya tombol pembayaran
                       <TouchableOpacity style={styles.btnPay} onPress={() => openReceipt(item)}>
                         <Text style={styles.btnPayText}>Bayar</Text>
+                      </TouchableOpacity>
+                    ) : isShipped ? (
+                      // pesanan dikirim/selesai: buka detail untuk melihat pelacakan
+                      <TouchableOpacity style={styles.btnReorder} onPress={() => openReceipt(item)}>
+                        <Text style={styles.btnReorderText}>Lacak</Text>
                       </TouchableOpacity>
                     ) : (
                       // pesanan lunas/gagal: siapkan ulang item lalu langsung buka Checkout

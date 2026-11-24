@@ -51,6 +51,14 @@ export type Order = {
   total: number;
   // waktu pembuatan pesanan (ISO string / format tanggal dari DB)
   createdAt: string;
+  // ongkos kirim (0 bila tanpa pengiriman)
+  shippingCost?: number;
+  // nama ekspedisi terpilih
+  courierName?: string | null;
+  // nomor resi pengiriman
+  trackingNumber?: string | null;
+  // snapshot alamat pengiriman
+  shippingAddress?: string | null;
   // daftar item dalam pesanan (ringkas untuk ditampilkan)
   items: { product_id: string; name: string; qty: number; price: number }[];
 };

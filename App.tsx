@@ -113,6 +113,8 @@ import AdminSalesScreen from './src/screens/admin/AdminSalesScreen';
 import AdminPrintScreen from './src/screens/admin/AdminPrintScreen';
 import AdminCategoriesScreen from './src/screens/admin/AdminCategoriesScreen';
 import AdminCarouselScreen from './src/screens/admin/AdminCarouselScreen';
+import AdminOrdersScreen from './src/screens/admin/AdminOrdersScreen';
+import AdminCouriersScreen from './src/screens/admin/AdminCouriersScreen';
 // LAYAR BARU: Kelola Supplier
 import AdminSuppliersScreen from './src/screens/admin/AdminSuppliersScreen';
 
@@ -428,6 +430,16 @@ function AdminTabs({ onSignOut }: { onSignOut: () => void }) {
           name="Carousel"
           component={AdminCarouselScreen}
           options={{ title: 'Slide' }}
+        />
+        <Tab.Screen
+          name="Orders"
+          component={AdminOrdersScreen}
+          options={{ title: 'Pesanan' }}
+        />
+        <Tab.Screen
+          name="Couriers"
+          component={AdminCouriersScreen}
+          options={{ title: 'Ekspedisi' }}
         />
       </Tab.Navigator>
     </SuppliersProvider>
