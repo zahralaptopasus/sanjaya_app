@@ -15,7 +15,9 @@ import { useGuest } from '../store/guest';
 // mengambil fungsi createOrder dan createSnapToken (untuk membuat order & token pembayaran Midtrans)
 // getOrderStatus (cek status asli pesanan), cancelOrder (batalkan pesanan + kembalikan stok)
 // getAddresses (ambil data kendaraan utama untuk mengisi plat nomor otomatis)
-import { createOrder, createSnapToken, getOrderStatus, cancelOrder, getAddresses } from '../repo';
+import { createOrder, createSnapToken, getOrderStatus, cancelOrder, getAddresses, getCouriers } from '../repo';
+// tipe data alamat & ekspedisi untuk pengiriman
+import type { CustomerAddress, ShippingCourier } from '../repo';
 // mengambil klien Supabase untuk membaca data profil (nama & nomor HP)
 import { supabase } from '../lib/supabase';
 // mengambil fungsi rp (untuk mengubah angka menjadi format Rupiah)
@@ -59,6 +61,14 @@ export default function CheckoutScreen({ navigation }: any) {
   const [payErr, setPayErr] = useState<string | null>(null);
   // metode pembayaran yang dipilih: Midtrans (online) atau COD (tunai di tempat)
   const [method, setMethod] = useState<'midtrans' | 'cod'>('midtrans');
+  // daftar alamat tersimpan (kind='address') untuk dipilih sebagai tujuan kirim
+  const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
+  // alamat terpilih (default: alamat utama)
+  const [selectedAddrId, setSelectedAddrId] = useState<string | null>(null);
+  // daftar ekspedisi aktif
+  const [couriers, setCouriers] = useState<ShippingCourier[]>([]);
+  // ekspedisi terpilih
+  const [selectedCourierId, setSelectedCourierId] = useState<string | null>(null);
   // kode pesanan dibangkitkan via Date.now() - diambil 6 digit terakhir untuk menghasilkan kode unik
   // memakai useState dengan lazy initializer supaya kode dibuat SATU KALI saat layar dibuka
   // (bukan di tiap render, dan bukan dengan membaca .current ref saat render)
@@ -99,8 +109,8 @@ export default function CheckoutScreen({ navigation }: any) {
       discount: cart.selectedDiscount,
       // metode pembayaran yang dipilih (dipakai struk untuk membedakan Midtrans / COD)
       paymentMethod: method,
-      // COD dimulai dari status pending agar struk tidak sempat menampilkan "Berhasil"
-      ...(method === 'cod' ? { initialStatus: 'pending' } : {}),
+      // COD langsung lunas (sama seperti Midtrans)
+      ...(method === 'cod' ? { initialStatus: 'paid' } : {}),
     };
     // menghapus HANYA item yang dibeli (terpilih) dari keranjang saat lunas;
     // item yang tidak dicentang tetap tersimpan untuk dibeli nanti
@@ -139,6 +149,46 @@ export default function CheckoutScreen({ navigation }: any) {
     return () => { active = false; };
   }, [isGuest]);
 
+  // effect: muat alamat tersimpan + ekspedisi aktif
+  useEffect(() => {
+    if (isGuest) return;
+    let active = true;
+    getAddresses('address').then((rows) => {
+      if (!active) return;
+      setAddresses(rows);
+      // pilih alamat utama bila ada, kalau tidak yang pertama
+      const main = rows.find((r) => r.is_default) ?? rows[0];
+      if (main) setSelectedAddrId((prev) => prev ?? main.id);
+    });
+    getCouriers().then((rows) => {
+      if (!active) return;
+      setCouriers(rows);
+      // auto-pilih ekspedisi pertama agar tombol bayar tidak diam tanpa alasan
+      setSelectedCourierId((prev) => prev ?? (rows[0]?.id ?? null));
+    });
+    return () => { active = false; };
+  }, [isGuest]);
+
+  // muat ulang alamat saat layar kembali aktif (mis. setelah tambah alamat di layar Alamat)
+  useEffect(() => {
+    if (isGuest) return () => {};
+    const unsub = navigation?.addListener?.('focus', () => {
+      getAddresses('address').then((rows) => {
+        setAddresses(rows);
+        setSelectedAddrId((prev) => (prev && rows.some((r) => r.id === prev) ? prev : (rows.find((r) => r.is_default) ?? rows[0])?.id ?? null));
+      });
+    });
+    return unsub;
+  }, [navigation, isGuest]);
+
+  // alamat & ekspedisi terpilih untuk perhitungan ongkir/validasi
+  const selectedAddr = addresses.find((a) => a.id === selectedAddrId) ?? null;
+  const selectedCourier = couriers.find((k) => k.id === selectedCourierId) ?? null;
+  // ongkir dari ekspedisi terpilih (0 bila belum pilih)
+  const shippingCost = selectedCourier?.price ?? 0;
+  // total bayar = total keranjang + ongkir
+  const grandTotal = cart.selectedTotal + shippingCost;
+
 
   // fungsi untuk memproses pembayaran: membuat order terlebih dahulu, lalu mendapatkan token Midtrans Snap
   const pay = async () => {
@@ -152,6 +202,16 @@ export default function CheckoutScreen({ navigation }: any) {
     if (!name.trim() || !phone.trim()) {
       // tampilkan pesan error inline (aman di web karena Alert.alert tidak berfungsi di web)
       setErr('Nama dan nomor HP/WA wajib diisi.');
+      return;
+    }
+    // validasi alamat pengiriman wajib dipilih
+    if (!selectedAddr) {
+      setErr('Alamat pengiriman wajib dipilih. Tambah alamat dulu bila belum ada.');
+      return;
+    }
+    // validasi ekspedisi wajib dipilih
+    if (!selectedCourier) {
+      setErr('Ekspedisi pengiriman wajib dipilih.');
       return;
     }
     // bersihkan pesan error bila isian sudah valid
@@ -182,16 +242,34 @@ export default function CheckoutScreen({ navigation }: any) {
       subtotal: cart.selectedSubtotal,
       // diskon yang diterapkan (item terpilih)
       discount: cart.selectedDiscount,
-      // total yang harus dibayar (item terpilih)
-      total: cart.selectedTotal,
+      // total yang harus dibayar (item terpilih + ongkir)
+      total: grandTotal,
       // kirim metode pembayaran ke database
       paymentMethod: method,
+      // ongkir ekspedisi terpilih
+      shippingCost,
+      // snapshot alamat + ekspedisi terpilih
+      address: {
+        address_id: selectedAddr?.id ?? null,
+        name: selectedAddr?.name ?? name,
+        phone: selectedAddr?.phone ?? phone,
+        address: selectedAddr?.address ?? '',
+        courier_id: selectedCourier?.id ?? null,
+        courier_name: selectedCourier?.name ?? null,
+      },
     });
 
     // database belum menjalankan migration COD
     if (dbOrderId === 'MIGRATION_REQUIRED') {
       setPaying(false);
       setErr('Database belum mendukung pembayaran COD. Jalankan migration 20261107_cod_payment.sql di Supabase.');
+      return;
+    }
+
+    // error RPC asli (COD tidak punya fallback) — tampilkan pesannya
+    if (typeof dbOrderId === 'string' && dbOrderId.startsWith('ERR:')) {
+      setPaying(false);
+      setErr('Gagal membuat pesanan: ' + dbOrderId.slice(4));
       return;
     }
 
@@ -522,11 +600,101 @@ export default function CheckoutScreen({ navigation }: any) {
               <Text style={[styles.sumValue, { color: c.warn }]}>- {rp(cart.selectedDiscount)}</Text>
             </View>
           ) : null}
+          {/* baris ongkir (hanya tampil bila ekspedisi dipilih) */}
+          {shippingCost > 0 ? (
+            <View style={styles.sumRow}>
+              <Text style={styles.sumLabel}>Ongkir ({selectedCourier?.name})</Text>
+              <Text style={styles.sumValue}>{rp(shippingCost)}</Text>
+            </View>
+          ) : null}
           {/* baris total bayar */}
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total Bayar</Text>
-            <Text style={styles.totalValue}>{rp(cart.selectedTotal)}</Text>
+            <Text style={styles.totalValue}>{rp(grandTotal)}</Text>
           </View>
+        </View>
+
+        {/* ===== KARTU ALAMAT PENGIRIMAN ===== */}
+        <View style={styles.card}>
+          <View style={styles.cardHeadRow}>
+            <View style={styles.cardIcon}>
+              <Ionicons name="location-outline" size={20} color={c.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>Alamat Pengiriman</Text>
+              <Text style={styles.cardSub}>Pilih alamat tujuan pengiriman</Text>
+            </View>
+            <TouchableOpacity onPress={() => navigation.navigate('Alamat')}>
+              <Text style={{ color: c.primary, fontFamily: 'Inter_700Bold', fontSize: 12 }}>Kelola</Text>
+            </TouchableOpacity>
+          </View>
+
+          {addresses.length === 0 ? (
+            <TouchableOpacity style={styles.addrEmptyBtn} onPress={() => navigation.navigate('Alamat')}>
+              <Ionicons name="add-circle-outline" size={16} color={c.primary} />
+              <Text style={{ color: c.primary, fontFamily: 'Inter_700Bold', marginLeft: 6 }}>Tambah alamat baru</Text>
+            </TouchableOpacity>
+          ) : (
+            addresses.map((a) => {
+              const active = a.id === selectedAddrId;
+              return (
+                <TouchableOpacity
+                  key={a.id}
+                  style={[styles.addrOption, active && styles.addrOptionActive]}
+                  onPress={() => { setSelectedAddrId(a.id); if (err) setErr(null); }}
+                  activeOpacity={0.85}
+                >
+                  <View style={[styles.radio, active && styles.radioActive]}>
+                    {active ? <View style={styles.radioDot} /> : null}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.addrName}>{a.label || 'Alamat'}{a.is_default ? ' (Utama)' : ''}</Text>
+                    <Text style={styles.addrDetail} numberOfLines={2}>
+                      {a.name ? `${a.name} • ` : ''}{a.phone ? `${a.phone}\n` : ''}{a.address ?? ''}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </View>
+
+        {/* ===== KARTU EKSPEDISI ===== */}
+        <View style={styles.card}>
+          <View style={styles.cardHeadRow}>
+            <View style={styles.cardIcon}>
+              <Ionicons name="car-outline" size={20} color={c.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>Ekspedisi</Text>
+              <Text style={styles.cardSub}>Pilih jasa kirim</Text>
+            </View>
+          </View>
+
+          {couriers.length === 0 ? (
+            <Text style={styles.addrDetail}>Belum ada ekspedisi tersedia.</Text>
+          ) : (
+            couriers.map((k) => {
+              const active = k.id === selectedCourierId;
+              return (
+                <TouchableOpacity
+                  key={k.id}
+                  style={[styles.addrOption, active && styles.addrOptionActive]}
+                  onPress={() => { setSelectedCourierId(k.id); if (err) setErr(null); }}
+                  activeOpacity={0.85}
+                >
+                  <View style={[styles.radio, active && styles.radioActive]}>
+                    {active ? <View style={styles.radioDot} /> : null}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.addrName}>{k.name}</Text>
+                    {k.description ? <Text style={styles.addrDetail} numberOfLines={1}>{k.description}</Text> : null}
+                  </View>
+                  <Text style={{ fontFamily: 'Inter_800ExtraBold', color: c.primary }}>{rp(k.price)}</Text>
+                </TouchableOpacity>
+              );
+            })
+          )}
         </View>
 
         {/* ===== KARTU METODE PEMBAYARAN ===== */}
@@ -569,7 +737,7 @@ export default function CheckoutScreen({ navigation }: any) {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.methodTitle}>Tunai di Tempat (COD)</Text>
-              <Text style={styles.methodDesc}>Bayar tunai saat ambil barang di toko</Text>
+              <Text style={styles.methodDesc}>Bayar tunai saat kurir mengantar pesanan</Text>
             </View>
             <Ionicons name="cash-outline" size={18} color={c.warn} />
           </TouchableOpacity>
@@ -579,7 +747,7 @@ export default function CheckoutScreen({ navigation }: any) {
             <View style={styles.codNote}>
               <Ionicons name="information-circle" size={14} color={c.warn} />
               <Text style={styles.codNoteText}>
-                Stok dipesan sekarang. Bayar saat pengambilan; admin akan menandai LUNAS.
+                Bayar tunai ke kurir saat pesanan tiba. Pesanan langsung tercatat LUNAS.
               </Text>
             </View>
           ) : (
@@ -596,8 +764,15 @@ export default function CheckoutScreen({ navigation }: any) {
         {/* baris atas: label + nilai total */}
         <View style={styles.payTopRow}>
           <Text style={styles.payLabel}>Total Bayar</Text>
-          <Text style={styles.payValue}>{rp(cart.selectedTotal)}</Text>
+          <Text style={styles.payValue}>{rp(grandTotal)}</Text>
         </View>
+        {/* pesan error terlihat tepat di atas tombol bayar */}
+        {err ? (
+          <View style={styles.errBox}>
+            <Ionicons name="alert-circle" size={14} color={c.danger} />
+            <Text style={styles.errText}>{err}</Text>
+          </View>
+        ) : null}
         {/* tombol bayar kuning aksen */}
         <TouchableOpacity style={styles.payBtn} onPress={pay} disabled={paying}>
           {/* saat proses pembayaran tampil spinner, jika tidak tampil ikon gembok + teks */}
@@ -701,6 +876,18 @@ const makeStyles = (c: Palette) => StyleSheet.create({
   radioActive: { borderColor: c.primary },
   // titik di dalam radio aktif
   radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: c.primary },
+  // opsi alamat / ekspedisi
+  addrOption: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderColor: c.border,
+    borderRadius: 12, padding: 12, marginBottom: 8, backgroundColor: c.card,
+  },
+  addrOptionActive: { borderColor: c.primary, backgroundColor: c.primarySoft },
+  addrName: { fontSize: 13, fontFamily: 'Inter_800ExtraBold', color: c.text },
+  addrDetail: { fontSize: 11, color: c.textMuted, marginTop: 2, lineHeight: 15 },
+  addrEmptyBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5,
+    borderColor: c.primary, borderStyle: 'dashed', borderRadius: 12, padding: 14,
+  },
   // judul metode
   methodTitle: { fontSize: 14, fontFamily: 'Inter_800ExtraBold', color: c.text },
   // keterangan metode

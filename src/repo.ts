@@ -25,6 +25,51 @@ export async function getProducts(): Promise<Product[]> {
   }
 }
 
+// snapshot data pengiriman yang dikirim saat membuat order
+export type OrderShipping = {
+  // id alamat tersimpan (boleh null bila diisi manual)
+  address_id: string | null;
+  // nama penerima
+  name: string;
+  // nomor telepon penerima
+  phone: string;
+  // detail alamat
+  address: string;
+  // id & nama ekspedisi terpilih
+  courier_id: string | null;
+  courier_name: string | null;
+};
+
+// tipe data ekspedisi (tabel shipping_couriers)
+export type ShippingCourier = {
+  id: string;
+  name: string;
+  price: number;
+  description: string | null;
+  is_active: boolean;
+};
+
+// mengambil daftar ekspedisi aktif untuk dipilih di checkout
+export async function getCouriers(): Promise<ShippingCourier[]> {
+  try {
+    const { data, error } = await supabase
+      .from('shipping_couriers')
+      .select('id, name, price, description, is_active')
+      .eq('is_active', true)
+      .order('name', { ascending: true });
+    if (error || !data) return [];
+    return (data as Record<string, any>[]).map((r) => ({
+      id: String(r.id),
+      name: String(r.name),
+      price: Number(r.price),
+      description: r.description ?? null,
+      is_active: Boolean(r.is_active),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 // fungsi untuk membuat pesanan baru melalui RPC (PostgreSQL function) di Supabase
 // RPC 'create_order_with_items' menangani pembuatan order + order_items secara atomik
 // serta pengecekan stok (stok_kurang) di sisi database
@@ -41,6 +86,10 @@ export async function createOrder(params: {
   total: number;
   // metode pembayaran: Midtrans (online) atau COD/tunai di tempat
   paymentMethod?: 'midtrans' | 'cod';
+  // ongkos kirim (dari ekspedisi terpilih), default 0
+  shippingCost?: number;
+  // snapshot alamat pengiriman + kurir terpilih
+  address?: OrderShipping | null;
 }): Promise<string | null> {
   try {
     // mengambil user yang sedang login
@@ -64,15 +113,19 @@ export async function createOrder(params: {
     // - p_items: array item pesanan
     // - p_discount: besar diskon (agar total yang disimpan sesuai total bayar setelah kupon)
     // - p_payment_method: 'midtrans' atau 'cod' (butuh migration 20261107_cod_payment.sql)
+    // - p_shipping_cost: ongkir ekspedisi (butuh migration 20261120_shipping.sql)
+    // - p_address: snapshot alamat + kurir terpilih
     let { data, error } = await supabase.rpc('create_order_with_items', {
       p_code: params.code,
       p_items: items,
       p_discount: params.discount,
       p_payment_method: method,
+      p_shipping_cost: params.shippingCost ?? 0,
+      p_address: params.address ?? null,
     });
 
-    // fallback kompatibilitas: bila database belum menjalankan migration COD,
-    // alur Midtrans tetap bisa jalan memakai RPC lama (tanpa p_payment_method).
+    // fallback kompatibilitas: bila database belum menjalankan migration COD/shipping,
+    // alur Midtrans tetap bisa jalan memakai RPC lama (tanpa p_payment_method/ongkir).
     if (error && /PGRST202|could not find the function|schema cache/i.test(error.message ?? '')) {
       if (method === 'cod') {
         console.error('create_order: migration COD belum dijalankan', error);
@@ -90,6 +143,8 @@ export async function createOrder(params: {
     if (error) {
       // deteksi error khusus: stok kurang
       if (/stok_kurang/i.test(error.message ?? '')) return 'STOK_KURANG';
+      // COD tidak punya fallback; teruskan pesan asli agar terlihat di layar
+      if (method === 'cod') return 'ERR:' + (error.message ?? 'unknown');
       // log error lain untuk debugging
       console.error('create_order rpc error', error);
       return null;
@@ -249,7 +304,7 @@ export async function getMyOrders(): Promise<Order[]> {
   // .order('created_at', { ascending: false }) = urutkan terbaru dulu
   const { data, error } = await supabase
     .from('orders')
-    .select('id, code, status, total, created_at, payment_method, order_items(product_id, name, qty, price)')
+    .select('id, code, status, total, created_at, payment_method, shipping_cost, courier_name, tracking_number, shipping_address, order_items(product_id, name, qty, price)')
     .order('created_at', { ascending: false });
   if (error || !data) return [];
   // mapping hasil query ke tipe Order
@@ -261,6 +316,11 @@ export async function getMyOrders(): Promise<Order[]> {
     // metode pembayaran tersimpan di database ('midtrans' / 'cod')
     paymentMethod: String(o.payment_method ?? 'midtrans'),
     total: Number(o.total),
+    // info pengiriman (boleh kosong untuk order lama)
+    shippingCost: Number(o.shipping_cost ?? 0),
+    courierName: o.courier_name ?? null,
+    trackingNumber: o.tracking_number ?? null,
+    shippingAddress: o.shipping_address ?? null,
     // created_at dari DB dipetakan ke createdAt
     createdAt: String(o.created_at),
     // mapping order_items menjadi array items dengan normalisasi tipe

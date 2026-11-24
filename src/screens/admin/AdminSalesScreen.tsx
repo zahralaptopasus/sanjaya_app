@@ -19,7 +19,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import { adminGetProducts, adminGetSales } from "../../lib/admin";
+import { adminGetProducts, adminGetSales, adminUpdateOrderStatus } from "../../lib/admin";
 import { useLowStock } from "../../context/LowStockContext";
 import { supabase } from "../../lib/supabase";
 import { rp } from "../../lib/format";
@@ -38,7 +38,7 @@ type DraftItem = {
 };
 
 type Period = "today" | "7d" | "30d" | "all";
-type StatusFilter = "all" | "paid" | "pending";
+type StatusFilter = "all" | "paid" | "pending" | "dikirim" | "selesai";
 const shortDate = (iso: string) =>
   new Date(iso).toLocaleDateString("id", { day: "numeric", month: "short", year: "numeric" });
 const longDateTime = (iso: string) => {
@@ -101,16 +101,22 @@ const statusLabel = (s: string, method?: string) =>
   s === "paid"
     ? "Lunas"
     : s === "pending"
-      ? method === "cod"
-        ? "COD • Belum bayar"
-        : "Menunggu"
-      : s;
+      ? "Menunggu"
+      : s === "dikirim"
+        ? "Dikirim"
+        : s === "selesai"
+          ? "Selesai"
+          : s;
 const statusColors = (s: string) =>
   s === "pending"
     ? { bg: "#FFF8CC", fg: "#8A6D00" }
     : s === "paid"
       ? { bg: chipBg, fg: bronze }
-      : { bg: "#FFEBEB", fg: "#BA1A1A" };
+      : s === "dikirim"
+        ? { bg: "#DCE9FF", fg: navy }
+        : s === "selesai"
+          ? { bg: "#E6E1F7", fg: "#4527A0" }
+          : { bg: "#FFEBEB", fg: "#BA1A1A" };
 
 // rentang tanggal berdasarkan periode terpilih
 const periodRange = (p: Period): { startDate?: string; endDate?: string } => {
@@ -135,6 +141,8 @@ const STATUSES: { key: StatusFilter; label: string }[] = [
   { key: "all", label: "Semua" },
   { key: "paid", label: "Lunas" },
   { key: "pending", label: "Menunggu" },
+  { key: "dikirim", label: "Dikirim" },
+  { key: "selesai", label: "Selesai" },
 ];
 
 // ===== KOMPONEN UTAMA =====
@@ -160,6 +168,10 @@ export default function AdminSalesScreen() {
   // modal struk
   const [receipt, setReceipt] = useState<any | null>(null);
   const [printing, setPrinting] = useState(false);
+
+  // modal kirim (input resi)
+  const [shipTarget, setShipTarget] = useState<any | null>(null);
+  const [resi, setResi] = useState("");
 
   // ambil produk (untuk picker) & penjualan (sesuai periode)
   const load = useCallback(async () => {
@@ -315,15 +327,25 @@ export default function AdminSalesScreen() {
     }
   };
 
-  // tandai lunas (order pending -> paid)
-  const markPaid = async (id: string) => {
-    try {
-      const { error } = await supabase.rpc("update_order_status", { p_order_id: id, p_status: "paid" });
-      if (error) throw error;
-      load();
-    } catch (e: any) {
-      Alert.alert("Gagal", e?.message ?? "Gagal ubah status");
-    }
+  // ubah status (lunas -> dikirim -> selesai)
+  const setSaleStatus = async (id: string, status: "paid" | "dikirim" | "selesai", trackingNumber?: string | null) => {
+    const res = await adminUpdateOrderStatus(id, status, trackingNumber);
+    if (res.error) Alert.alert("Gagal", res.error);
+    load();
+  };
+  const markPaid = (id: string) => setSaleStatus(id, "paid");
+  // kirim: minta nomor resi lewat modal
+  const markShipped = (sale: any) => {
+    setShipTarget(sale);
+    setResi("");
+  };
+  const submitShip = async () => {
+    // resi opsional: boleh kosong, status tetap dikirim
+    const t = resi.trim();
+    const target = shipTarget;
+    setShipTarget(null);
+    setResi("");
+    if (target) await setSaleStatus(target.id, "dikirim", t || null);
   };
 
   // bagikan struk sebagai teks
@@ -508,6 +530,20 @@ export default function AdminSalesScreen() {
                     <TouchableOpacity style={styles.paidBtn} onPress={() => markPaid(s.id)}>
                       <Ionicons name="checkmark-done" size={14} color="#fff" />
                       <Text style={styles.paidText}>Lunas</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  {s.status === "paid" && !!s.shippingAddress ? (
+                    <TouchableOpacity style={styles.paidBtn} onPress={() => markShipped(s)}>
+                      <Ionicons name="cube-outline" size={14} color="#fff" />
+                      <Text style={styles.paidText}>Kirim</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  {(s.status === "dikirim" || (s.status === "paid" && !s.shippingAddress)) ? (
+                    <TouchableOpacity style={styles.paidBtn} onPress={() => setSaleStatus(s.id, "selesai")}>
+                      <Ionicons name="checkmark-circle-outline" size={14} color="#fff" />
+                      <Text style={styles.paidText}>Selesai</Text>
                     </TouchableOpacity>
                   ) : null}
                 </View>
@@ -759,6 +795,38 @@ export default function AdminSalesScreen() {
                 </View>
               </ScrollView>
             ) : null}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ===== MODAL KIRIM (ISI RESI) ===== */}
+      <Modal visible={!!shipTarget} animationType="slide" transparent onRequestClose={() => setShipTarget(null)}>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setShipTarget(null)} />
+          <View style={styles.sheet}>
+            <View style={styles.sheetHead}>
+              <Text style={styles.sheetTitle}>Kirim Pesanan</Text>
+              <TouchableOpacity onPress={() => setShipTarget(null)}>
+                <Ionicons name="close" size={22} color={ink} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.itemMeta}>{shipTarget?.code}</Text>
+            <TextInput
+              style={[styles.miniInput, { marginTop: 12 }]}
+              placeholder="Nomor resi pengiriman (opsional)"
+              placeholderTextColor={muted}
+              value={resi}
+              onChangeText={setResi}
+              autoCapitalize="characters"
+            />
+            <View style={styles.footer}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShipTarget(null)}>
+                <Text style={styles.cancelText}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveBtn} onPress={submitShip}>
+                <Text style={styles.saveText}>Kirim</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
