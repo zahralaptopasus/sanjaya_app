@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, StyleSheet, Image } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import type { CartItem } from '../../models';
@@ -86,7 +86,9 @@ export default function CartItemCard({
       marginRight: 12,
       alignItems: 'center',
       justifyContent: 'center',
+      overflow: 'hidden',
     },
+    photoImg: { width: '100%', height: '100%', borderRadius: 12, resizeMode: 'contain' },
     name: { fontSize: 14, fontFamily: 'Inter_700Bold', color: c.text },
     category: { fontSize: 11, color: c.textMuted, marginTop: 2 },
     rowBottom: {
@@ -143,7 +145,11 @@ export default function CartItemCard({
           />
         </TouchableOpacity>
         <View style={styles.photo}>
-          <Ionicons name='cube-outline' size={26} color={c.primary} />
+          {item.product.image ? (
+            <Image source={{ uri: item.product.image }} style={styles.photoImg} />
+          ) : (
+            <Ionicons name='cube-outline' size={26} color={c.primary} />
+          )}
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.name} numberOfLines={2}>{item.product.name}</Text>

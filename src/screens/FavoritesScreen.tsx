@@ -144,7 +144,7 @@ export default function FavoritesScreen({ navigation }: any) {
               {/* kotak gambar/ikon produk */}
               <View style={styles.thumb}>
                 {item.image ? (
-                  <Image source={{ uri: item.image }} style={styles.thumbImage} resizeMode="cover" />
+                  <Image source={{ uri: item.image }} style={styles.thumbImage} resizeMode="contain" />
                 ) : (
                   <Ionicons name="cube" size={30} color={c.textFaint} />
                 )}
@@ -209,7 +209,7 @@ const makeStyles = (c: Palette, cardW: number) => StyleSheet.create({
   },
   // kotak gambar produk: tinggi 104, latar chip, sudut 12, isi di tengah, jarak bawah 9
   thumb: {
-    height: 104,
+    height: 350,
     backgroundColor: c.chip,
     borderRadius: 12,
     alignItems: 'center',

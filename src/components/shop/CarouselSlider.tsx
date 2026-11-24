@@ -110,7 +110,7 @@ export default function CarouselSlider({ slides, onSlidePress }: CarouselSliderP
       minHeight: 118,
     },
     slideIconSub: { fontSize: 9, fontFamily: 'Inter_700Bold', color: '#131B2E', marginTop: 4 },
-    slideImg: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, resizeMode: 'cover' },
+    slideImg: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, resizeMode: 'contain' },
     dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 10, marginBottom: 12 },
     dot: { height: 7, borderRadius: 4 },
     dotActive: { width: 22, backgroundColor: c.primary },
