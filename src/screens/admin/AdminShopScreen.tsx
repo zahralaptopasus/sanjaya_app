@@ -107,9 +107,9 @@ const styles = StyleSheet.create({
   // kartu produk: mengisi kolom (flex 1), latar cardBg, sudut 16, padding 12, jarak bawah 12, garis tepi krem
   card: { flex: 1, backgroundColor: cardBg, borderRadius: 16, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#E5DFD1' },
   // thumbnail: tinggi 92, latar chipBg, sudut 12, isi di tengah, jarak bawah 9
-  thumb: { height: 150, backgroundColor: chipBg, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 9, overflow: 'hidden' },
-  // gambar thumbnail produk: tampil utuh (contain), sudut rapi mengikuti thumb
-  thumbImage: { width: '100%', height: '100%', borderRadius: 12, resizeMode: 'contain' },
+  thumb: { aspectRatio: 1, backgroundColor: chipBg, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 9, overflow: 'hidden' },
+  // gambar thumbnail produk: penuhi kotak persegi (cover), sudut rapi mengikuti thumb
+  thumbImage: { width: '100%', height: '100%', borderRadius: 12, resizeMode: 'cover' },
   // label stok: posisi absolut di pojok kanan atas, latar putih, sudut 6, padding 6/2, garis tepi krem
   stockTag: { position: 'absolute', top: 8, right: 8, backgroundColor: '#fff', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: '#E5DFD1' },
   // teks stok: ukuran 9, font tebal, warna bronze
