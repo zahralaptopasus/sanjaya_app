@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, ScrollView, TouchableOpacity, Text, Image, StyleSheet, Linking, Alert } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Text, Image, StyleSheet, Linking, Alert, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { CarouselSlide } from '../../lib/carousel';
 import { useColors } from '../../store/preferences';
@@ -11,6 +11,8 @@ type CarouselSliderProps = {
 
 export default function CarouselSlider({ slides, onSlidePress }: CarouselSliderProps) {
   const c = useColors();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const [activeSlide, setActiveSlide] = useState(0);
   const [carouselW, setCarouselW] = useState(0);
   const carouselRef = useRef<ScrollView>(null);
@@ -110,7 +112,7 @@ export default function CarouselSlider({ slides, onSlidePress }: CarouselSliderP
       minHeight: 118,
     },
     slideIconSub: { fontSize: 9, fontFamily: 'Inter_700Bold', color: '#131B2E', marginTop: 4 },
-    slideImg: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, resizeMode: 'contain' },
+    slideImg: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
     dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 10, marginBottom: 12 },
     dot: { height: 7, borderRadius: 4 },
     dotActive: { width: 22, backgroundColor: c.primary },
@@ -153,7 +155,7 @@ export default function CarouselSlider({ slides, onSlidePress }: CarouselSliderP
               </View>
               <View style={styles.slideRight}>
                 {s.image_url ? (
-                  <Image source={{ uri: s.image_url }} style={styles.slideImg} />
+                  <Image source={{ uri: s.image_url }} style={styles.slideImg} resizeMode={isMobile ? 'cover' : 'contain'} />
                 ) : (
                   <>
                     <Ionicons name={(s.icon ?? 'pricetag') as any} size={48} color='#131B2E' />
