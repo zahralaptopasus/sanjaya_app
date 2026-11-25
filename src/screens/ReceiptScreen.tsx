@@ -1,8 +1,7 @@
 // ===== IMPORT (mengambil library / file yang dibutuhkan) =====
 
 // mengambil React dan hook useEffect (untuk mengambil status pesanan saat layar dibuka)
-import React, { useEffect, useMemo } from 'react';
-// mengambil komponen bawaan React Native: View (kotak/div), Text (teks), ScrollView (area yang bisa digulir),
+import React, { useEffect, useMemo } from 'react';// mengambil komponen bawaan React Native: View (kotak/div), Text (teks), ScrollView (area yang bisa digulir),
 // TouchableOpacity (tombol), StyleSheet (pembuat style), Share (berbagi teks), Alert (dialog), ActivityIndicator (animasi loading),
 // Platform (deteksi web/native) dan Linking (membuka URL pembayaran di perangkat native)
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Share, Alert, ActivityIndicator, Platform, Linking } from 'react-native';
@@ -15,6 +14,8 @@ import type { Palette } from '../theme';
 import { demoProducts, type CartItem } from '../models';
 // mengambil ikon Ionicons dari Expo
 import { Ionicons } from '@expo/vector-icons';
+// mengambil komponen SVG (Svg, Path, Circle, G) untuk menggambar jalur peta rute dengan rapi
+import Svg, { Path, Circle, G } from 'react-native-svg';
 // mengambil modul expo-print untuk membuat PDF dari HTML
 import * as Print from 'expo-print';
 // mengambil modul expo-sharing untuk membagikan file PDF
@@ -117,6 +118,134 @@ function generateHTML(params: any) {
     </div>
   </body>
   </html>`;
+}
+
+// ===== KOMPONEN PETA RUTE =====
+
+// titik-titik rute: kurva kuadratik dari kiri bawah, naik ke tengah, lalu ke kanan atas
+function routePoints(count: number) {
+  // titik kontrol kurva (membuat jalur melengkung seperti peta)
+  const p0 = { x: 6, y: 74 };
+  const p1 = { x: 42, y: 96 };
+  const p2 = { x: 94, y: 22 };
+  const pts: { x: number; y: number }[] = [];
+  for (let i = 0; i <= count; i++) {
+    const t = i / count;
+    // rumus bezier kuadratik
+    const x = (1 - t) * (1 - t) * p0.x + 2 * (1 - t) * t * p1.x + t * t * p2.x;
+    const y = (1 - t) * (1 - t) * p0.y + 2 * (1 - t) * t * p1.y + t * t * p2.y;
+    pts.push({ x, y });
+  }
+  return pts;
+}
+
+// peta rute statis: latar peta + jalan + jalur pengiriman + penanda tujuan
+function DeliveryMap({ done }: { done: boolean }) {
+  const c = useColors();
+  // 46 titik jalur (cukup halus, tetap ringan)
+  const points = useMemo(() => routePoints(46), []);
+  // ukuran kontainer (px) agar koordinat % bisa dikonversi ke px untuk SVG
+  const [size, setSize] = React.useState({ w: 0, h: 150 });
+  // saat masih dikirim, jalur baru terisi ~60% (posisi kendaraan)
+  const progress = done ? 1 : 0.62;
+  const cut = Math.round(progress * (points.length - 1));
+  // penanda tujuan di ujung jalur
+  const dest = points[points.length - 1];
+
+  // konversi titik % -> px berdasarkan ukuran kontainer
+  const px = (p: { x: number; y: number }) => ({ x: (p.x / 100) * size.w, y: (p.y / 100) * size.h });
+  // posisi kendaraan (px) mengikuti ujung jalur yang sudah ditempuh
+  const vehicle = px(points[cut]);
+  const destPx = px(dest);
+
+  // path SVG (kurva mulus lewat semua titik) + panjang tiap segmen untuk dash jalur terlewati
+  const { pathD, segLens } = useMemo(() => {
+    if (size.w <= 0) return { pathD: '', segLens: [] as number[] };
+    const pts = points.map((p) => ({ x: (p.x / 100) * size.w, y: (p.y / 100) * size.h }));
+    let d = `M ${pts[0].x} ${pts[0].y}`;
+    const lens: number[] = [];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1];
+      const b = pts[i];
+      // garis lurus antar titik halus (titik rapat) -> hasil mulus & dash akurat
+      d += ` L ${b.x} ${b.y}`;
+      lens.push(Math.hypot(b.x - a.x, b.y - a.y));
+    }
+    return { pathD: d, segLens: lens };
+  }, [points, size.w, size.h]);
+  // panjang jalur yang sudah ditempuh (dari awal sampai titik cut)
+  const doneLen = segLens.slice(0, cut).reduce((a, b) => a + b, 0);
+  // total panjang jalur (untuk dash: tampilkan doneLen, sisanya kosong)
+  const totalLen = segLens.reduce((a, b) => a + b, 0);
+  // trackDone = jalur sudah dilalui, trackTodo = sisa jalur
+  const trackDone = c.primary;
+  const trackTodo = '#D8D6CE';
+
+  return (
+    <View
+      style={{ height: 150, borderRadius: 12, overflow: 'hidden', backgroundColor: '#EFEDE4' }}
+      onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
+    >
+      {/* blok hijau (taman) */}
+      <View style={{ position: 'absolute', left: -20, top: -10, width: 120, height: 90, borderRadius: 60, backgroundColor: '#DFE9D3', opacity: 0.9 }} />
+      <View style={{ position: 'absolute', right: -30, bottom: -20, width: 150, height: 100, borderRadius: 60, backgroundColor: '#DDE7D6', opacity: 0.8 }} />
+      {/* blok biru (air) */}
+      <View style={{ position: 'absolute', right: 20, bottom: 8, width: 70, height: 22, borderRadius: 11, backgroundColor: '#CFE0EA', opacity: 0.9, transform: [{ rotate: '-12deg' }] }} />
+      {/* jalan-jalan peta */}
+      <View style={{ position: 'absolute', left: -10, top: 46, width: 340, height: 5, backgroundColor: '#FBFAF6', transform: [{ rotate: '-8deg' }] }} />
+      <View style={{ position: 'absolute', left: 90, top: -10, width: 5, height: 190, backgroundColor: '#FBFAF6', transform: [{ rotate: '14deg' }] }} />
+      <View style={{ position: 'absolute', left: 10, top: 112, width: 300, height: 4, backgroundColor: '#FBFAF6', transform: [{ rotate: '6deg' }] }} />
+      <View style={{ position: 'absolute', left: 210, top: -10, width: 4, height: 180, backgroundColor: '#FBFAF6', transform: [{ rotate: '-20deg' }] }} />
+
+      {/* jalur pengiriman: garis solid penuh (abu) + bagian terlewati (biru primary) */}
+      {size.w > 0 ? (
+        <Svg width={size.w} height={size.h} style={StyleSheet.absoluteFill}>
+          {/* sisa jalur (belum ditempuh) */}
+          <Path d={pathD} stroke={trackTodo} strokeWidth={4} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          {/* jalur sudah ditempuh: tampil sepanjang doneLen */}
+          <Path
+            d={pathD}
+            stroke={trackDone}
+            strokeWidth={4}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray={`${doneLen} ${totalLen}`}
+          />
+
+          {/* penanda kendaraan (lingkaran gelap di posisi cut) */}
+          <G transform={`translate(${vehicle.x} ${vehicle.y})`}>
+            <Circle r={13} fill={done ? c.primary : '#2B2A28'} />
+          </G>
+
+          {/* penanda tujuan (pin oranye: lingkaran + titik putih + ekor) */}
+          <G transform={`translate(${destPx.x} ${destPx.y})`}>
+            <Path d="M 0 0 L -6 -10 L 6 -10 Z" fill="#F26B21" />
+            <Circle cy={-18} r={12} fill="#F26B21" stroke="#fff" strokeWidth={2} />
+            <Circle cy={-18} r={3} fill="#fff" />
+          </G>
+        </Svg>
+      ) : null}
+
+      {/* ikon di dalam penanda kendaraan (overlay, posisi mengikuti vehicle) */}
+      {size.w > 0 ? (
+        <View
+          style={{
+            position: 'absolute',
+            left: vehicle.x - 13,
+            top: vehicle.y - 13,
+            width: 26,
+            height: 26,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          pointerEvents="none"
+        >
+          <Ionicons name={done ? 'checkmark' : 'car-sport'} size={14} color="#fff" />
+        </View>
+      ) : null}
+    </View>
+  );
 }
 
 // ===== KOMPONEN UTAMA =====
@@ -405,48 +534,20 @@ export default function ReceiptScreen({ navigation, route }: any) {
         </Text>
       </View>
 
-      {/* ===== KARTU PELACAKAN PENGIRIMAN (STATIS) ===== */}
+      {/* ===== KARTU PELACAKAN PENGIRIMAN (peta rute statis) ===== */}
       {(statusShipped || statusDone) ? (
         <View style={styles.card}>
           <View style={{ padding: 16 }}>
             <Text style={{ fontSize: 14, fontFamily: 'Inter_800ExtraBold', color: c.text, marginBottom: 2 }}>
               {statusDone ? 'Terkirim' : 'Sedang dalam perjalanan'}
             </Text>
-            <Text style={{ fontSize: 11, color: c.textMuted, marginBottom: 14 }}>
+            <Text style={{ fontSize: 11, color: c.textMuted, marginBottom: 12 }}>
               {courierName ? `Ekspedisi: ${courierName}` : 'Pengiriman ekspedisi'}
               {trackingNumber ? ` • Resi ${trackingNumber}` : ''}
             </Text>
 
-            {/* peta statis: asal -> garis -> tujuan, ikon truk menandai posisi */}
-            <View style={{ position: 'relative', height: 70, justifyContent: 'center' }}>
-              {/* garis penghubung di tengah */}
-              <View
-                style={{
-                  position: 'absolute', left: 24, right: 24, top: 34,
-                  borderTopWidth: 3, borderColor: c.border, borderStyle: statusDone ? 'solid' : 'dashed',
-                }}
-              />
-              {/* titik asal (toko) */}
-              <View style={{ position: 'absolute', left: 0, top: 18, width: 48, alignItems: 'center' }}>
-                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: c.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name="storefront" size={18} color={c.primary} />
-                </View>
-                <Text style={{ fontSize: 9, color: c.textMuted, marginTop: 2 }}>Toko</Text>
-              </View>
-              {/* titik tujuan (rumah) */}
-              <View style={{ position: 'absolute', right: 0, top: 18, width: 48, alignItems: 'center' }}>
-                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: statusDone ? c.primarySoft : c.chip, alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name="home" size={18} color={statusDone ? c.primary : c.textMuted} />
-                </View>
-                <Text style={{ fontSize: 9, color: c.textMuted, marginTop: 2 }}>Tujuan</Text>
-              </View>
-              {/* ikon truk: di tengah saat dikirim, di tujuan saat selesai */}
-              <View style={{ position: 'absolute', left: 24, right: 24, top: 12, alignItems: statusDone ? 'flex-end' : 'center' }}>
-                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name={statusDone ? 'checkmark-done' : 'car-sport'} size={16} color="#fff" />
-                </View>
-              </View>
-            </View>
+            {/* peta rute statis: blok kota + jalan + jalur + penanda tujuan */}
+            <DeliveryMap done={statusDone} />
 
             {/* alamat tujuan + keterangan posisi */}
             <Text style={{ fontSize: 11, color: c.textMuted, marginTop: 12, lineHeight: 16 }}>
