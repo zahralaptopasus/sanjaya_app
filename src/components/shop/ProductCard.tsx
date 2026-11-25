@@ -11,9 +11,10 @@ type ProductCardProps = {
   onToggleFav: () => void;
   isFavorite: boolean;
   width?: number;
+  fillHeight?: boolean;
 };
 
-export default function ProductCard({ product, onPress, onAddCart, onToggleFav, isFavorite, width }: ProductCardProps) {
+export default function ProductCard({ product, onPress, onAddCart, onToggleFav, isFavorite, width, fillHeight }: ProductCardProps) {
   const c = useColors();
   const styles = StyleSheet.create({
     card: {
@@ -38,7 +39,7 @@ export default function ProductCard({ product, onPress, onAddCart, onToggleFav, 
       width: '100%',
       height: '100%',
       borderRadius: 12,
-      resizeMode: 'contain',
+      resizeMode: fillHeight ? 'cover' : 'contain',
     },
     heart: {
       position: 'absolute',
