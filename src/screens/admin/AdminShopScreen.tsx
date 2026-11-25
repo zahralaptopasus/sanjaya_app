@@ -1,10 +1,10 @@
 // ===== IMPORT (mengambil library / file yang dibutuhkan) =====
 
 // mengambil React dan hook useEffect (saat layar dibuka) serta useState (data yang bisa berubah)
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 // mengambil komponen React Native: View (kotak), Text (teks), FlatList (daftar efisien),
 // StyleSheet (pembuat style), ActivityIndicator (animasi loading), Image (gambar)
-import { View, Text, FlatList, StyleSheet, ActivityIndicator, Image } from 'react-native';
+import { View, Text, FlatList, StyleSheet, ActivityIndicator, Image, useWindowDimensions } from 'react-native';
 // mengambil kumpulan ikon Ionicons dari Expo
 import { Ionicons } from '@expo/vector-icons';
 // mengambil fungsi adminGetProducts (ambil daftar produk) dari lib/admin
@@ -25,6 +25,10 @@ export default function AdminShopScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   // penanda data pertama kali sedang dimuat
   const [loading, setLoading] = useState(true);
+  // deteksi layar mobile untuk mengatur bentuk thumbnail
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  const styles = useMemo(() => makeStyles(isMobile), [isMobile]);
 
   // useEffect dijalankan sekali saat layar muncul: ambil produk lalu matikan loading
   useEffect(() => {
@@ -99,17 +103,17 @@ export default function AdminShopScreen() {
 
 // ===== STYLE (pengaturan tampilan) =====
 
-const styles = StyleSheet.create({
+const makeStyles = (isMobile: boolean) => StyleSheet.create({
   // judul halaman: ukuran 20, font Poppins tebal, warna ink
   header: { fontSize: 20, fontFamily: 'Poppins_800ExtraBold',  color: ink },
   // keterangan di bawah judul: ukuran 12, warna abu, jarak atas 2, bawah 14
   sub: { fontSize: 12, color: muted, marginTop: 2, marginBottom: 14 },
   // kartu produk: mengisi kolom (flex 1), latar cardBg, sudut 16, padding 12, jarak bawah 12, garis tepi krem
   card: { flex: 1, backgroundColor: cardBg, borderRadius: 16, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#E5DFD1' },
-  // thumbnail: tinggi 350, latar chipBg, sudut 12, isi di tengah, jarak bawah 9
-  thumb: { height: 350, backgroundColor: chipBg, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 9, overflow: 'hidden' },
-  // gambar thumbnail produk: tampil utuh (contain), sisa kanan-kiri, sudut rapi mengikuti thumb
-  thumbImage: { width: '100%', height: '100%', borderRadius: 12, resizeMode: 'contain' },
+  // thumbnail: mobile persegi, desktop tinggi 180, latar chipBg, sudut 12, isi di tengah, jarak bawah 9
+  thumb: { ...(isMobile ? { aspectRatio: 1 } : { height: 180 }), backgroundColor: chipBg, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 9, overflow: 'hidden' },
+  // gambar thumbnail produk: mobile cover (penuh), desktop contain (utuh), sudut rapi mengikuti thumb
+  thumbImage: { width: '100%', height: '100%', borderRadius: 12, resizeMode: isMobile ? 'cover' : 'contain' },
   // label stok: posisi absolut di pojok kanan atas, latar putih, sudut 6, padding 6/2, garis tepi krem
   stockTag: { position: 'absolute', top: 8, right: 8, backgroundColor: '#fff', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: '#E5DFD1' },
   // teks stok: ukuran 9, font tebal, warna bronze
