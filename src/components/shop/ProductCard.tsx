@@ -27,7 +27,7 @@ export default function ProductCard({ product, onPress, onAddCart, onToggleFav, 
       borderColor: c.border,
     },
     thumb: {
-      height: width ? width - 24 : 350,
+      height: fillHeight ? (width ? width - 24 : 350) : 180,
       backgroundColor: c.chip,
       borderRadius: 12,
       alignItems: 'center',

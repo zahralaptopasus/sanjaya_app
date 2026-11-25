@@ -210,7 +210,7 @@ const makeStyles = (c: Palette, cardW: number, isMobile: boolean) => StyleSheet.
   },
   // kotak gambar produk: tinggi 104, latar chip, sudut 12, isi di tengah, jarak bawah 9
   thumb: {
-    height: cardW - 24,
+    height: isMobile ? cardW - 24 : 180,
     backgroundColor: c.chip,
     borderRadius: 12,
     alignItems: 'center',
