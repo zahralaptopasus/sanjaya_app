@@ -48,6 +48,7 @@ export default function ShopScreen({ navigation }: any) {
   const { isGuest, exit } = useGuest();
   const c = useColors();
   const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const cardW = (width - 16 * 2 - 14) / 2;
 
   const searchRef = useRef<any>(null);
@@ -256,6 +257,7 @@ export default function ShopScreen({ navigation }: any) {
           <ProductCard
             product={item}
             width={cardW}
+            fillHeight={isMobile}
             onPress={() =>
               isGuest
                 ? promptLogin()
