@@ -52,7 +52,8 @@ export default function FavoritesScreen({ navigation }: any) {
   // lebar kartu = (lebar layar - padding kiri/kanan list 16+16 - gap 14) / 2
   // dibuat tetap agar kartu tunggal tidak melebar penuh
   const cardW = (width - 16 * 2 - 14) / 2;
-  const styles = useMemo(() => makeStyles(c, cardW), [c, cardW]);
+  const isMobile = width < 768;
+  const styles = useMemo(() => makeStyles(c, cardW, isMobile), [c, cardW, isMobile]);
 
   // memuat daftar produk favorit dari server
   const load = useCallback(async () => {
@@ -144,7 +145,7 @@ export default function FavoritesScreen({ navigation }: any) {
               {/* kotak gambar/ikon produk */}
               <View style={styles.thumb}>
                 {item.image ? (
-                  <Image source={{ uri: item.image }} style={styles.thumbImage} resizeMode="contain" />
+                  <Image source={{ uri: item.image }} style={styles.thumbImage} resizeMode={isMobile ? 'cover' : 'contain'} />
                 ) : (
                   <Ionicons name="cube" size={30} color={c.textFaint} />
                 )}
@@ -186,7 +187,7 @@ export default function FavoritesScreen({ navigation }: any) {
 // ===== STYLE =====
 
 // makeStyles = pembuat style berdasarkan palet warna aktif
-const makeStyles = (c: Palette, cardW: number) => StyleSheet.create({
+const makeStyles = (c: Palette, cardW: number, isMobile: boolean) => StyleSheet.create({
   // header biru halaman favorit
   header: { backgroundColor: c.primary, paddingTop: 12, paddingBottom: 14, paddingHorizontal: 16 },
   // judul header: putih, tebal (Poppins), ukuran 20
@@ -209,7 +210,7 @@ const makeStyles = (c: Palette, cardW: number) => StyleSheet.create({
   },
   // kotak gambar produk: tinggi 104, latar chip, sudut 12, isi di tengah, jarak bawah 9
   thumb: {
-    height: 350,
+    height: cardW - 24,
     backgroundColor: c.chip,
     borderRadius: 12,
     alignItems: 'center',
